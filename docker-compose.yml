@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:15
+    container_name: radix_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: radix_user
+      POSTGRES_PASSWORD: radix_password
+      POSTGRES_DB: radix_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radix_user -d radix_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:0.3.14
+    container_name: radix_ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+
+  ollama-pull-models:
+    image: curlimages/curl:latest
+    container_name: radix_ollama_pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Ollama is healthy! Pulling extraction model qwen2.5:14b-instruct...';
+      curl -s -X POST http://ollama:11434/api/pull -d '{\"name\": \"qwen2.5:14b-instruct\"}' > /dev/null;
+      echo 'Pulling embedding model nomic-embed-text...';
+      curl -s -X POST http://ollama:11434/api/pull -d '{\"name\": \"nomic-embed-text\"}' > /dev/null;
+      echo 'All local models pulled successfully!';
+      "
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: radix_backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://radix_user:radix_password@postgres:5432/radix_db
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:14b-instruct
+      - OLLAMA_EMBED_MODEL=nomic-embed-text
+      - JWT_SECRET=radix_super_secret_session_token_key_generation_2026_dev_mode
+      - STORAGE_DIR=/app/storage
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_storage:/app/storage
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: radix_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:
+  ollama_data:
+  backend_storage:

@@ -1,0 +1,70 @@
+You are an expert technical resume parser and talent analyst. Your task is to analyze the Resume text below and extract a structured candidate profile.
+
+Strictly categorize every extracted skill into one of these 12 RADIX skill categories, or use "OTHER" if it does not fit any of them:
+- COD: Coding (general software engineering coding, syntax, scripting, languages)
+- DSA: Data Structures & Algorithms (algorithmic complexity, trees, graphs, sorting, searching)
+- OOD: Object-Oriented Programming & Design (classes, interfaces, polymorphism, design patterns)
+- APTI: Aptitude & Problem Solving (logical reasoning, analytical thinking, math, problem solving)
+- COMM: Communication Skills (technical writing, presentation, stakeholder communication, team collaboration)
+- AI: AI-Native Engineering (LLMs, prompt engineering, machine learning, deep learning, PyTorch, model fine-tuning)
+- CLOUD: DevOps & Cloud (Docker, Kubernetes, AWS, Azure, GCP, CI/CD pipelines, IaC, automation)
+- SQL: SQL & Data Design (database queries, indexing, normalization, database schema design, NoSQL, data modeling)
+- SWE: Software Engineering (Agile methodology, unit testing, Git, code reviews, clean code practices, SDLC)
+- SYSD: System Design & Architecture (scalability, microservices, load balancers, caching, distributed systems)
+- NETW: Computer Networking (TCP/IP, HTTP, DNS, routing, network protocols)
+- OS: Operating Systems (Linux administration, process management, memory management, threads, scripting)
+- OTHER: Anything outside the 12 (specific named technologies, tools, domain-specific knowledge like Photoshop, SEO, finance)
+
+For each skill, you must:
+1. Provide the exact "skill_name" (normalized, e.g. "Python" or "Kubernetes").
+2. Assign the appropriate "category_code".
+3. Provide "evidence": a short quote from the text showing this skill (maximum 200 characters).
+4. Rate your extraction "confidence" as "high", "medium", or "low".
+
+Also, extract:
+- candidate_name (best-effort)
+- email (best-effort)
+- education: list of {degree, institution, year}
+- projects: list of {title, description}
+- experience: list of {role, org, duration}
+
+Respond ONLY with a valid JSON object in the following format. Do not include any chat prefix or suffix.
+
+JSON format:
+{
+  "candidate_name": "Candidate Name or null",
+  "email": "candidate@email.com or null",
+  "education": [
+    {
+      "degree": "Degree/Major",
+      "institution": "University/School",
+      "year": "Graduation Year (e.g. 2024) or null"
+    }
+  ],
+  "projects": [
+    {
+      "title": "Project Title",
+      "description": "Short project description"
+    }
+  ],
+  "experience": [
+    {
+      "role": "Role Name",
+      "org": "Organization/Company Name",
+      "duration": "Duration (e.g. June 2022 - Aug 2023) or null"
+    }
+  ],
+  "skills": [
+    {
+      "skill_name": "Skill Name",
+      "category_code": "COD|DSA|OOD|APTI|COMM|AI|CLOUD|SQL|SWE|SYSD|NETW|OS|OTHER",
+      "evidence": "Short direct quote or reason, max 200 chars",
+      "confidence": "high|medium|low"
+    }
+  ]
+}
+
+Resume Text:
+---
+{resume_text}
+---
