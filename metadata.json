@@ -1,0 +1,6 @@
+{
+  "name": "Code Odyssey",
+  "description": "An immersive cosmic candidate-centric match engine that semantically aligns CVs with top-tier tech benchmarks using Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
