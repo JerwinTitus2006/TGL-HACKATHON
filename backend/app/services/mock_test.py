@@ -23,7 +23,7 @@ from backend.app.services.leetcode_service import (
 from backend.app.services.question_bank import generate_mcqs
 
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
-MODEL = "openrouter/free"
+MODEL = "google/gemini-2.5-flash:free"
 
 
 def _get_api_key() -> str:
@@ -397,6 +397,12 @@ async def submit_test(db: Session, user_id: str, session_id: str, answers: dict[
     }
 
     # Save mock test results
+    # Check if a result already exists to avoid duplicate constraint errors
+    existing_result = db.query(MockTestResult).filter(MockTestResult.session_id == session.id).first()
+    if existing_result:
+        db.delete(existing_result)
+        db.commit()
+
     db_result = MockTestResult(
         session_id=session.id,
         user_id=session.user_id,
@@ -551,22 +557,7 @@ Do not include any explanation or markdown outside the JSON."""
     try:
         api_key = _get_api_key()
         import re
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(
-            f"{OPENROUTER_API_BASE}/chat/completions",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-            },
-            json={
-                "model": MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,
-                "max_tokens": 512,
-            },
-        )
-        if not resp.is_success:
-            print(f"[Self-Healing] Code evaluation failed with status {resp.status_code}. Retrying with free model meta-llama/llama-3.3-70b-instruct:free")
+        async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
                 f"{OPENROUTER_API_BASE}/chat/completions",
                 headers={
@@ -574,14 +565,14 @@ Do not include any explanation or markdown outside the JSON."""
                     "Authorization": f"Bearer {api_key}",
                 },
                 json={
-                    "model": "meta-llama/llama-3.3-70b-instruct:free",
+                    "model": MODEL,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0.3,
                     "max_tokens": 512,
                 },
             )
             if not resp.is_success:
-                print(f"[Self-Healing] Secondary code evaluation free model failed with status {resp.status_code}. Retrying with google/gemma-2-9b-it:free")
+                print(f"[Self-Healing] Code evaluation failed with status {resp.status_code}. Retrying with free model meta-llama/llama-3.3-70b-instruct:free")
                 resp = await client.post(
                     f"{OPENROUTER_API_BASE}/chat/completions",
                     headers={
@@ -589,26 +580,41 @@ Do not include any explanation or markdown outside the JSON."""
                         "Authorization": f"Bearer {api_key}",
                     },
                     json={
-                        "model": "google/gemma-2-9b-it:free",
+                        "model": "meta-llama/llama-3.3-70b-instruct:free",
                         "messages": [{"role": "user", "content": prompt}],
                         "temperature": 0.3,
                         "max_tokens": 512,
                     },
                 )
-        if not resp.is_success:
-            raise RuntimeError(f"OpenRouter API error: {resp.status_code}")
-        data = resp.json()
-        text = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-        )
-        clean = text.replace("```json", "").replace("```", "").strip()
-        parsed = json.loads(clean)
-        # Ensure parsed JSON has required keys, otherwise fallback
-        if not isinstance(parsed, dict) or "score" not in parsed:
-            raise ValueError("Invalid JSON response from LLM evaluation")
-        return parsed
+                if not resp.is_success:
+                    print(f"[Self-Healing] Secondary code evaluation free model failed with status {resp.status_code}. Retrying with google/gemma-2-9b-it:free")
+                    resp = await client.post(
+                        f"{OPENROUTER_API_BASE}/chat/completions",
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {api_key}",
+                        },
+                        json={
+                            "model": "google/gemma-2-9b-it:free",
+                            "messages": [{"role": "user", "content": prompt}],
+                            "temperature": 0.3,
+                            "max_tokens": 512,
+                        },
+                    )
+            if not resp.is_success:
+                raise RuntimeError(f"OpenRouter API error: {resp.status_code}")
+            data = resp.json()
+            text = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+            clean = text.replace("```json", "").replace("```", "").strip()
+            parsed = json.loads(clean)
+            # Ensure parsed JSON has required keys, otherwise fallback
+            if not isinstance(parsed, dict) or "score" not in parsed:
+                raise ValueError("Invalid JSON response from LLM evaluation")
+            return parsed
     except Exception as e:
         print(f"[Code Evaluation] Failed to evaluate code: {e}")
         return {

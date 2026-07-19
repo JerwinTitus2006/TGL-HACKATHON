@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
-MODEL = "openrouter/free"
+MODEL = "google/gemini-2.5-flash:free"
 
 
 def get_api_key() -> str:

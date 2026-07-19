@@ -225,7 +225,7 @@ class ExtractionService:
             "X-Title": "RADIX Talent Match"
         }
         
-        primary_model = "openrouter/free"
+        primary_model = "google/gemini-2.5-flash:free"
         data = {
             "model": primary_model,
             "messages": [

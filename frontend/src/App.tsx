@@ -943,19 +943,20 @@ export default function App() {
 
   const handleSubmitMockTest = async () => {
     if (!activeTestSession) return;
-    if (!window.confirm('Are you sure you want to submit your mock test?')) return;
+    if (!window.confirm('Are you sure you want to submit your mock test? This will end your assessment session immediately.')) return;
     setSubmittingTest(true);
+    const sessionId = activeTestSession.session_id;
     try {
-      await apiCall(`/mock-test/${activeTestSession.session_id}/submit`, {
+      await apiCall(`/mock-test/${sessionId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          session_id: activeTestSession.session_id,
+          session_id: sessionId,
           answers: testAnswers
         })
       });
       
-      const res = await apiCall(`/mock-test/results/${activeTestSession.session_id}`);
+      const res = await apiCall(`/mock-test/results/${sessionId}`);
       setActiveTestResult(res);
       setActiveTestSession(null);
       triggerMessage('success', 'Mock test submitted successfully!');
@@ -968,7 +969,11 @@ export default function App() {
       } catch (e) {}
       await fetchMockTestHistory();
     } catch (err: any) {
-      triggerMessage('error', err.message || 'Failed to submit test');
+      console.error("Test submission failed:", err);
+      // Ensure the test is marked as over even if API fails
+      setActiveTestSession(null);
+      triggerMessage('error', err.message || 'Failed to submit test. Your session was ended.');
+      await fetchMockTestHistory();
     } finally {
       setSubmittingTest(false);
     }
@@ -2944,6 +2949,71 @@ export default function App() {
         {/* Tab: Mock Test */}
         {currentTab === 'mock-test' && (
           <div className="animate-slide-up" style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+            {submittingTest && (
+              <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                background: 'rgba(0, 0, 0, 0.85)',
+                backdropFilter: 'blur(8px)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 9999,
+                color: 'var(--white-pure)',
+                fontFamily: 'var(--font-display)'
+              }}>
+                <div className="glass-card animate-slide-up" style={{
+                  padding: '40px',
+                  maxWidth: '500px',
+                  width: '90%',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '24px',
+                  border: '1px solid var(--grey-800)',
+                  boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+                }}>
+                  <div style={{
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid var(--grey-700)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <RefreshCw className="spin" size={28} style={{ color: 'var(--white-pure)' }} />
+                  </div>
+                  
+                  <div>
+                    <span className="eyebrow-label" style={{ fontSize: '10px', color: '#fbbf24', letterSpacing: '1px' }}>SESSION ENDED & LOCKING</span>
+                    <h3 style={{ fontSize: '20px', fontWeight: 800, marginTop: '8px', marginBottom: '12px' }}>Evaluating Submission...</h3>
+                    <p style={{ color: 'var(--grey-400)', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
+                      Your test session is officially over. The AI evaluation pipeline is currently parsing your responses and scoring the coding challenges.
+                    </p>
+                  </div>
+
+                  <div style={{ 
+                    background: 'rgba(239, 68, 68, 0.1)', 
+                    border: '1px solid rgba(239, 68, 68, 0.2)', 
+                    padding: '12px 16px', 
+                    fontSize: '12px', 
+                    color: '#f87171',
+                    textAlign: 'left',
+                    fontFamily: 'var(--font-mono)',
+                    lineHeight: 1.4,
+                    width: '100%'
+                  }}>
+                    <strong>WARNING:</strong> Please do not refresh the page, close the browser, or navigate away. Doing so will interrupt the grading process and corrupt your test score sheet.
+                  </div>
+                </div>
+              </div>
+            )}
             <div>
               <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '32px' }}>Mock Test</h1>
               <p style={{ color: 'var(--color-text-muted)' }}>Generate adaptive mock tests and simulate online assessments</p>

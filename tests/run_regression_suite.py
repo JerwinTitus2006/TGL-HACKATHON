@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.app.config import settings
-from backend.app.database import Base
+from backend.app.database import Base, engine, SessionLocal
 from backend.app.models import User, Candidate, Document, Extraction
 from backend.app.services.extraction_service import ExtractionService
 from backend.app.services.profile_service import ProfileService
@@ -29,9 +29,7 @@ def run_regression():
     print("=" * 60)
 
     # Initialize db connection
-    engine = create_engine(settings.DATABASE_URL)
-    Session = sessionmaker(bind=engine)
-    db = Session()
+    db = SessionLocal()
     Base.metadata.create_all(bind=engine)
 
     # 1. Ensure we have a test user and candidate profile setup
