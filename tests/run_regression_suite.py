@@ -154,13 +154,87 @@ def run_regression():
     # We will test Google, Microsoft, and Oracle
     companies_to_test = ["google-llc", "microsoft", "oracle-corporation"]
     
+    # Seed target companies if they do not exist
+    from backend.app.models import Company, CompanySkillset
+    
+    target_companies = {
+        "google-llc": {
+            "name": "Google LLC",
+            "type": "Super Dream",
+            "location": "Mountain View, CA",
+            "logo": "G",
+            "required_skills": {"Data Structures": 9, "Algorithms": 9, "System Design": 9, "Python": 8},
+            "benchmarks": {
+                "COD": (9, "Super Dream"), "DSA": (9, "Super Dream"), "OOD": (8, "Super Dream"), "APTI": (9, "Super Dream"),
+                "COMM": (7, "Dream"), "AI": (8, "Super Dream"), "CLOUD": (8, "Super Dream"), "SQL": (7, "Dream"),
+                "SWE": (8, "Super Dream"), "SYSD": (9, "Super Dream"), "NETW": (7, "Dream"), "OS": (8, "Super Dream")
+            }
+        },
+        "microsoft": {
+            "name": "Microsoft",
+            "type": "Super Dream",
+            "location": "Redmond, WA",
+            "logo": "M",
+            "required_skills": {"Data Structures": 8, "Algorithms": 8, "System Design": 8, "C#": 8},
+            "benchmarks": {
+                "COD": (8, "Super Dream"), "DSA": (8, "Super Dream"), "OOD": (9, "Super Dream"), "APTI": (8, "Super Dream"),
+                "COMM": (8, "Super Dream"), "AI": (7, "Dream"), "CLOUD": (8, "Super Dream"), "SQL": (8, "Super Dream"),
+                "SWE": (8, "Super Dream"), "SYSD": (8, "Super Dream"), "NETW": (8, "Super Dream"), "OS": (8, "Super Dream")
+            }
+        },
+        "oracle-corporation": {
+            "name": "Oracle Corporation",
+            "type": "Super Dream",
+            "location": "Austin, TX",
+            "logo": "O",
+            "required_skills": {"Data Structures": 8, "SQL": 9, "Java": 8},
+            "benchmarks": {
+                "COD": (8, "Super Dream"), "DSA": (8, "Super Dream"), "OOD": (8, "Super Dream"), "APTI": (8, "Super Dream"),
+                "COMM": (7, "Dream"), "AI": (6, "Dream"), "CLOUD": (7, "Dream"), "SQL": (9, "Super Dream"),
+                "SWE": (8, "Super Dream"), "SYSD": (8, "Super Dream"), "NETW": (7, "Dream"), "OS": (8, "Super Dream")
+            }
+        }
+    }
+    
+    for comp_slug, comp_data in target_companies.items():
+        # Check if Company exists
+        comp = db.query(Company).filter(Company.id == comp_slug).first()
+        if not comp:
+            print(f"Seeding missing Company record for {comp_data['name']} ({comp_slug})...")
+            comp = Company(
+                id=comp_slug,
+                name=comp_data["name"],
+                type=comp_data["type"],
+                location=comp_data["location"],
+                is_hiring=True,
+                deadline="2026-12-31",
+                logo=comp_data["logo"],
+                required_skills=comp_data["required_skills"]
+            )
+            db.add(comp)
+            db.commit()
+            
+        # Check if CompanySkillset benchmarks exist
+        count = db.query(CompanySkillset).filter(CompanySkillset.company_id == comp_slug).count()
+        if count == 0:
+            print(f"Seeding missing benchmarks for {comp_data['name']} ({comp_slug})...")
+            for cat_code, (level, tier) in comp_data["benchmarks"].items():
+                benchmark = CompanySkillset(
+                    company_id=comp_slug,
+                    company_name=comp_data["name"],
+                    category_code=cat_code,
+                    required_level=level,
+                    required_tier=tier
+                )
+                db.add(benchmark)
+            db.commit()
+            
     # Check if companies exist in DB
-    from backend.app.models import CompanySkillset
     existing_companies = [c[0] for c in db.query(CompanySkillset.company_id).distinct().all()]
     print(f"Available companies in database: {len(existing_companies)}")
     
     # Let's map target companies to database keys
-    # Standard slugified names: google-llc, microsoft-corporation, oracle-corporation
+    # Standard slugified names: google-llc, microsoft, oracle-corporation
     target_slugs = []
     for target in ["google", "microsoft", "oracle"]:
         match = [slug for slug in existing_companies if target in slug]

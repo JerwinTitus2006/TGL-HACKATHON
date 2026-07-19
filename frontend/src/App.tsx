@@ -3366,14 +3366,13 @@ export default function App() {
 
                 {/* Tab content 1: summary */}
                 {resultSubTab === 'summary' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr', gap: '28px', alignItems: 'start' }}>
-                    {/* Score summary panel */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '24px', background: 'var(--black-void)', border: '1px solid var(--grey-800)' }}>
-                      <span className="eyebrow-label" style={{ fontSize: '10px' }}>OVERALL SCORE</span>
-                      <div style={{ fontSize: '48px', fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
-                        {activeTestResult.total_score} <span style={{ fontSize: '20px', color: 'var(--grey-500)' }}>/ {activeTestResult.max_score}</span>
-                      </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 2fr', gap: '28px', alignItems: 'start' }}>
+                    {/* Left Column: Progress ring & MCQ/Coding comparison */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', padding: '24px', background: 'var(--black-void)', border: '1px solid var(--grey-800)' }}>
+                      <span className="eyebrow-label" style={{ fontSize: '10px' }}>OVERALL PERFORMANCE</span>
                       
+                      <ProgressRing value={activeTestResult.total_score} />
+
                       {/* Performance Grade Badge */}
                       {(() => {
                         const pct = (activeTestResult.total_score / (activeTestResult.max_score || 100)) * 100;
@@ -3389,35 +3388,103 @@ export default function App() {
                         );
                       })()}
 
-                      <div style={{ width: '100%', borderTop: '1px solid var(--grey-900)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--grey-400)' }}>MCQ Score:</span>
-                          <span>{activeTestResult.mcq_score} / {activeTestResult.mcq_total}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--grey-400)' }}>Coding Score:</span>
-                          <span>{activeTestResult.coding_score} / {activeTestResult.coding_total}</span>
-                        </div>
+                      <div style={{ width: '100%', marginTop: '10px' }}>
+                        <ComparisonBarChart 
+                          data={[
+                            ...(activeTestResult.mcq_total > 0 ? [{
+                              label: 'MCQ Questions Correct',
+                              value: activeTestResult.mcq_score,
+                              max: activeTestResult.mcq_total
+                            }] : []),
+                            ...(activeTestResult.coding_total > 0 ? [{
+                              label: 'Coding Points Earned',
+                              value: activeTestResult.coding_score,
+                              max: activeTestResult.coding_total
+                            }] : [])
+                          ]}
+                        />
                       </div>
+
+                      {/* Telemetry log console */}
+                      {(() => {
+                        const lines = [
+                          `[SYS] Evaluation completed at: ${new Date(activeTestResult.completed_at || Date.now()).toLocaleTimeString()}`,
+                          `[OK] MCQ accuracy: ${activeTestResult.mcq_total > 0 ? Math.round((activeTestResult.mcq_score / activeTestResult.mcq_total) * 100) : 0}%`,
+                          `[OK] Coding points: ${activeTestResult.coding_total > 0 ? Math.round((activeTestResult.coding_score / activeTestResult.coding_total) * 100) : 0}%`,
+                          `[SYS] AI recommendation engine initialized.`,
+                        ];
+                        return (
+                          <div style={{
+                            width: '100%',
+                            background: 'var(--black-elevated)',
+                            border: '1px solid var(--grey-800)',
+                            padding: '12px',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '10px',
+                            color: 'var(--grey-400)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px'
+                          }}>
+                            {lines.map((ln, idx) => (
+                              <div key={idx} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ln}</div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
 
-                    {/* Recommendations and breakdown */}
+                    {/* Right Column: Radar Chart & AI feedback/Practice areas */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                      <div className="glass-card" style={{ padding: '20px' }}>
-                        <h4 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>AI Recommended Practice Areas</h4>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                          {activeTestResult.weak_areas && activeTestResult.weak_areas.length > 0 ? (
-                            activeTestResult.weak_areas.map((area: string, areaIdx: number) => (
-                              <span key={areaIdx} style={{ fontSize: '11px', background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '4px 10px', color: 'var(--white-primary)', fontFamily: 'var(--font-mono)' }}>
-                                {area}
-                              </span>
-                            ))
-                          ) : (
-                            <span style={{ color: 'var(--grey-500)', fontSize: '12px', fontStyle: 'italic' }}>No weak areas identified! Outstanding performance.</span>
-                          )}
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: '20px' }}>
+                        {/* Radar Chart */}
+                        <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <h4 style={{ fontSize: '13px', fontWeight: 800, marginBottom: '12px', fontFamily: 'var(--font-mono)', color: 'var(--grey-400)' }}>TOPIC MASTERY RADAR</h4>
+                          <RadarChart
+                            data={(() => {
+                              const categories = ['APTITUDE', 'LOGICAL', 'VERBAL', 'TECHNICAL', 'CODING'];
+                              return categories.map(cat => {
+                                const qList = activeTestResult.questions?.filter((q: any) => q.category === cat) || [];
+                                let candidateScore = 0;
+                                if (cat === 'CODING') {
+                                  const codingTotal = activeTestResult.coding_total || 10;
+                                  const codingScore = activeTestResult.coding_score || 0;
+                                  candidateScore = codingTotal > 0 ? (codingScore / codingTotal) * 9 : 0;
+                                } else {
+                                  const total = qList.length;
+                                  const correct = qList.filter((q: any) => q.is_correct).length;
+                                  candidateScore = total > 0 ? (correct / total) * 9 : 0;
+                                }
+                                return {
+                                  category: cat,
+                                  required: 7,
+                                  candidate: Math.round(candidateScore * 10) / 10
+                                };
+                              });
+                            })()}
+                          />
+                        </div>
+
+                        {/* AI Recommended Practice Areas */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                          <div className="glass-card" style={{ padding: '20px', flex: 1 }}>
+                            <h4 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>AI Recommended Practice Areas</h4>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                              {activeTestResult.weak_areas && activeTestResult.weak_areas.length > 0 ? (
+                                activeTestResult.weak_areas.map((area: string, areaIdx: number) => (
+                                  <span key={areaIdx} style={{ fontSize: '11px', background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '4px 10px', color: 'var(--white-primary)', fontFamily: 'var(--font-mono)' }}>
+                                    {area}
+                                  </span>
+                                ))
+                              ) : (
+                                <span style={{ color: 'var(--grey-500)', fontSize: '12px', fontStyle: 'italic' }}>No weak areas identified! Outstanding performance.</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
+                      {/* AI Feedback & Practice Steps */}
                       <div className="glass-card" style={{ padding: '20px' }}>
                         <h4 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '12px' }}>AI Feedback & Practice Steps</h4>
                         <ul style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '20px', fontSize: '13px', color: 'var(--grey-300)', lineHeight: 1.6 }}>

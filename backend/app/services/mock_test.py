@@ -349,7 +349,7 @@ async def submit_test(db: Session, user_id: str, session_id: str, answers: dict[
     feedback_by_qid = {f.get("question_id"): f for f in coding_feedback}
     for q in questions:
         if q.category == "CODING":
-            f = feedback_by_qid.get(q.id)
+            f = feedback_by_qid.get(str(q.id))
             if f:
                 q.is_correct = (f["score"] == f["max_score"])
     db.commit()

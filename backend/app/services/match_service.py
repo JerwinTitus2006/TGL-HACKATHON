@@ -17,6 +17,27 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
         return 0.0
     return dot_product / (norm_v1 * norm_v2)
 
+_ollama_alive = None
+_last_check = None
+
+def is_ollama_alive() -> bool:
+    """Fast pre-flight check to see if Ollama is responsive. Results cached for 10 seconds."""
+    global _ollama_alive, _last_check
+    now = datetime.datetime.utcnow()
+    if _ollama_alive is not None and _last_check is not None:
+        if (now - _last_check).total_seconds() < 10:
+            return _ollama_alive
+
+    try:
+        # Ping the tags endpoint (very fast) with 1s timeout
+        resp = requests.get(f"{settings.OLLAMA_URL}/api/tags", timeout=1.0)
+        _ollama_alive = (resp.status_code == 200)
+    except Exception:
+        _ollama_alive = False
+
+    _last_check = now
+    return _ollama_alive
+
 def get_embedding(db: Session, text: str) -> list[float]:
     """Retrieve embedding from db cache or fetch from local Ollama nomic-embed-text."""
     norm_text = text.lower().strip()
@@ -26,14 +47,21 @@ def get_embedding(db: Session, text: str) -> list[float]:
     if cached:
         return cached.embedding
         
-    # 2. Fetch from Ollama
+    # 2. Fast pre-flight check for Ollama availability
+    if not is_ollama_alive():
+        raise HTTPException(
+            status_code=503,
+            detail=f"Ollama service is offline. Skipping embedding generation for '{text}'."
+        )
+
+    # 3. Fetch from Ollama
     url = f"{settings.OLLAMA_URL}/api/embeddings"
     data = {
         "model": settings.OLLAMA_EMBED_MODEL,
         "prompt": text
     }
     try:
-        response = requests.post(url, json=data, timeout=30)
+        response = requests.post(url, json=data, timeout=5)  # Set a shorter timeout since we did pre-flight check
         if response.status_code == 200:
             embedding = response.json()["embedding"]
             # Save to cache
