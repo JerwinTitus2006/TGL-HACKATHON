@@ -947,19 +947,23 @@ export default function App() {
     setSubmittingTest(true);
     const sessionId = activeTestSession.session_id;
     try {
-      await apiCall(`/mock-test/${sessionId}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          answers: testAnswers
-        })
-      });
+      try {
+        await apiCall(`/mock-test/${sessionId}/submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId,
+            answers: testAnswers
+          })
+        });
+      } catch (submitErr: any) {
+        console.warn("Submit endpoint failed or session already completed. Attempting to fetch results anyway...", submitErr);
+      }
       
       const res = await apiCall(`/mock-test/results/${sessionId}`);
       setActiveTestResult(res);
       setActiveTestSession(null);
-      triggerMessage('success', 'Mock test submitted successfully!');
+      triggerMessage('success', 'Mock test completed successfully!');
       try {
         confetti({
           particleCount: 100,
