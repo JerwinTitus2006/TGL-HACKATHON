@@ -483,6 +483,7 @@ export default function App() {
   const [expandedResultQuestion, setExpandedResultQuestion] = useState<string | null>(null);
   const [generatingTest, setGeneratingTest] = useState<boolean>(false);
   const [submittingTest, setSubmittingTest] = useState<boolean>(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState<boolean>(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string>('python');
   const [userCode, setUserCode] = useState<string>('');
   const [runCodeOutput, setRunCodeOutput] = useState<any>(null);
@@ -941,9 +942,14 @@ export default function App() {
     }
   };
 
-  const handleSubmitMockTest = async () => {
+  const handleSubmitMockTest = () => {
     if (!activeTestSession) return;
-    if (!window.confirm('Are you sure you want to submit your mock test? This will end your assessment session immediately.')) return;
+    setShowSubmitConfirm(true);
+  };
+
+  const confirmSubmitTest = async () => {
+    setShowSubmitConfirm(false);
+    if (!activeTestSession) return;
     setSubmittingTest(true);
     const sessionId = activeTestSession.session_id;
     try {
@@ -957,24 +963,16 @@ export default function App() {
           })
         });
       } catch (submitErr: any) {
-        console.warn("Submit endpoint failed or session already completed. Attempting to fetch results anyway...", submitErr);
+        console.warn('Submit endpoint failed, fetching existing results...', submitErr);
       }
-      
       const res = await apiCall(`/mock-test/results/${sessionId}`);
       setActiveTestResult(res);
       setActiveTestSession(null);
       triggerMessage('success', 'Mock test completed successfully!');
-      try {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
-      } catch (e) {}
+      try { confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); } catch (e) {}
       await fetchMockTestHistory();
     } catch (err: any) {
-      console.error("Test submission failed:", err);
-      // Ensure the test is marked as over even if API fails
+      console.error('Test submission failed:', err);
       setActiveTestSession(null);
       triggerMessage('error', err.message || 'Failed to submit test. Your session was ended.');
       await fetchMockTestHistory();
@@ -3018,6 +3016,51 @@ export default function App() {
                 </div>
               </div>
             )}
+            {/* Submit Confirmation Modal */}
+            {showSubmitConfirm && (
+              <div style={{
+                position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+                background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)',
+                display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
+              }}>
+                <div style={{
+                  background: '#111', border: '1px solid #333', borderRadius: '12px',
+                  padding: '36px', maxWidth: '420px', width: '90%', textAlign: 'center',
+                  display: 'flex', flexDirection: 'column', gap: '20px',
+                  boxShadow: '0 20px 60px rgba(0,0,0,0.7)'
+                }}>
+                  <div style={{ fontSize: '36px' }}>⚠️</div>
+                  <div>
+                    <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#fff', marginBottom: '10px' }}>Submit Test?</h3>
+                    <p style={{ color: '#aaa', fontSize: '14px', lineHeight: 1.6 }}>
+                      This will permanently end your test session. You cannot go back or change any answers after submitting.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <button
+                      onClick={() => setShowSubmitConfirm(false)}
+                      style={{
+                        padding: '10px 24px', background: 'transparent', color: '#aaa',
+                        border: '1px solid #444', borderRadius: '6px', cursor: 'pointer',
+                        fontSize: '14px', fontWeight: 600
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={confirmSubmitTest}
+                      style={{
+                        padding: '10px 28px', background: '#ef4444', color: '#fff',
+                        border: 'none', borderRadius: '6px', cursor: 'pointer',
+                        fontSize: '14px', fontWeight: 700
+                      }}
+                    >
+                      Yes, Submit Test
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div>
               <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '32px' }}>Mock Test</h1>
               <p style={{ color: 'var(--color-text-muted)' }}>Generate adaptive mock tests and simulate online assessments</p>
@@ -3148,12 +3191,39 @@ export default function App() {
                     <span className="eyebrow-label" style={{ fontSize: '9px' }}>ASSESSMENT IN PROGRESS</span>
                     <h3 style={{ fontSize: '16px', fontWeight: 800, marginTop: '2px' }}>{activeTestSession.test_type}</h3>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--white-pure)', fontFamily: 'var(--font-mono)' }}>
-                    <Clock size={16} />
-                    <span>
-                      {Math.floor(activeTestSession.remaining_seconds / 60)}:
-                      {String(activeTestSession.remaining_seconds % 60).padStart(2, '0')}
-                    </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--white-pure)', fontFamily: 'var(--font-mono)' }}>
+                      <Clock size={16} />
+                      <span>
+                        {Math.floor(activeTestSession.remaining_seconds / 60)}:
+                        {String(activeTestSession.remaining_seconds % 60).padStart(2, '0')}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleSubmitMockTest}
+                      disabled={submittingTest}
+                      style={{
+                        padding: '8px 20px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        letterSpacing: '0.5px',
+                        background: submittingTest ? 'rgba(239,68,68,0.3)' : 'rgba(239,68,68,0.15)',
+                        color: '#f87171',
+                        border: '1px solid rgba(239,68,68,0.4)',
+                        borderRadius: '6px',
+                        cursor: submittingTest ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s ease',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                      onMouseEnter={e => { if (!submittingTest) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.3)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.7)'; }}}
+                      onMouseLeave={e => { if (!submittingTest) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.15)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.4)'; }}}
+                    >
+                      {submittingTest ? <RefreshCw className="spin" size={13} /> : null}
+                      {submittingTest ? 'Submitting...' : '⬛ Submit Test'}
+                    </button>
                   </div>
                 </div>
 
