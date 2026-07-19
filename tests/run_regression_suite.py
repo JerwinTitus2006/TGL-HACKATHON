@@ -107,6 +107,7 @@ def run_regression():
             candidates_data[candidate_name] = candidate.id
             
         except Exception as e:
+            db.rollback()
             print(f"  -> ERROR processing resume {rf}: {e}")
 
     # 3. Extract and Process the 6 Job Descriptions
@@ -142,6 +143,7 @@ def run_regression():
             print(f"  -> Extracted {len(extraction.skills)} skills from JD.")
             jds_data[jd_name] = extraction.id
         except Exception as e:
+            db.rollback()
             print(f"  -> ERROR processing JD {jdf}: {e}")
 
     # 4. Perform Talent Check for each Candidate
@@ -179,6 +181,7 @@ def run_regression():
                     "Readiness Score": f"{check.readiness_score}%"
                 })
             except Exception as e:
+                db.rollback()
                 print(f"  -> Failed Talent Check for {cand_name} at {comp_slug}: {e}")
 
     # 5. Perform Skill Matches for all 24 pairs
@@ -200,6 +203,7 @@ def run_regression():
                     "Missing Skills": len(match_record.missing_skills)
                 })
             except Exception as e:
+                db.rollback()
                 print(f"  -> Failed Match for {cand_name} with {jd_name}: {e}")
 
     # 6. Output Markdown Report Summary

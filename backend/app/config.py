@@ -1,4 +1,6 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
@@ -15,6 +17,8 @@ class Settings(BaseSettings):
 
     # API Configuration
     OPENROUTER_API_KEY: Optional[str] = None
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
 
     # Database
     DATABASE_URL: str = "sqlite:///./radix.db"

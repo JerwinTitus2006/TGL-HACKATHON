@@ -170,6 +170,7 @@ def extract_document(
         
     res = {
         "schema_version": extraction.schema_version,
+        "extraction_id": extraction.id,
         "source_type": doc.doc_type,
         "source_file": doc.source_file_name,
         "source_hash": doc.source_hash,
@@ -225,6 +226,7 @@ def get_extraction(
         
     res = {
         "schema_version": extraction.schema_version,
+        "extraction_id": extraction.id,
         "source_type": doc.doc_type,
         "source_file": doc.source_file_name,
         "source_hash": doc.source_hash,

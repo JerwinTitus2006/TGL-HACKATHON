@@ -6,6 +6,7 @@ import requests
 from sqlalchemy import text
 from backend.app.database import SessionLocal, engine, Base, is_sqlite
 from backend.app.routers import auth, documents, profiles, talent_check, skill_match
+from backend.app.routers import ai_routes, mock_test_routes, student_routes, social_routes
 
 # Create database tables automatically if not present
 Base.metadata.create_all(bind=engine)
@@ -16,10 +17,24 @@ app = FastAPI(
     version="1.0"
 )
 
+@app.on_event("startup")
+def startup_event():
+    from backend.app.services.student_service import seed_database_companies_and_innovx
+    db = SessionLocal()
+    try:
+        seed_database_companies_and_innovx(db)
+    finally:
+        db.close()
+
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust for production
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,6 +74,10 @@ app.include_router(documents.router, prefix="/api")
 app.include_router(profiles.router, prefix="/api")
 app.include_router(talent_check.router, prefix="/api")
 app.include_router(skill_match.router, prefix="/api")
+app.include_router(ai_routes.router)
+app.include_router(mock_test_routes.router)
+app.include_router(student_routes.router)
+app.include_router(social_routes.router)
 
 @app.get("/health", tags=["health"])
 def health_check():

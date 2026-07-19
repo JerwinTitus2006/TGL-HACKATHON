@@ -38,6 +38,7 @@ class ExperienceEntry(BaseModel):
 # --- Extractions ---
 class ExtractionResponse(BaseModel):
     schema_version: str = "1.0"
+    extraction_id: Optional[uuid.UUID] = None
     source_type: str = Field(description="jd|resume")
     source_file: str
     source_hash: str
@@ -132,9 +133,11 @@ class TalentCheckResponse(BaseModel):
     schema_version: str = "1.0"
     candidate_id: uuid.UUID
     company: str
+    company_id: Optional[str] = None
     skillset_gap: List[SkillGapItem]
     readiness_score: int
     computed_at: datetime
+    company_intel: Optional[dict] = None
 
     class Config:
         from_attributes = True

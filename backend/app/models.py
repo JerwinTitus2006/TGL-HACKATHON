@@ -63,6 +63,8 @@ class User(Base):
     candidate = relationship("Candidate", back_populates="user", uselist=False, cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="owner", cascade="all, delete-orphan")
 
+from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, Enum, JSON, Numeric, Table, text, Boolean
+
 class Candidate(Base):
     __tablename__ = "candidates"
 
@@ -74,6 +76,16 @@ class Candidate(Base):
     preferred_roles = Column(JSON, nullable=True)  # List of strings
     cv_file_ref = Column(String(500), nullable=True)
     version = Column(Integer, default=1, nullable=False)  # For optimistic concurrency
+    
+    roll_number = Column(String(50), nullable=True)
+    branch = Column(String(100), nullable=True)
+    year = Column(Integer, nullable=True, default=4)
+    cgpa = Column(Numeric(4, 2), nullable=True, default=0.0)
+    phone = Column(String(50), nullable=True)
+    linkedin_url = Column(String(255), nullable=True)
+    github_url = Column(String(255), nullable=True)
+    leetcode_url = Column(String(255), nullable=True)
+    
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -241,3 +253,187 @@ class AuditLog(Base):
     entity_id = Column(GUID, nullable=True)
     payload = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class SocialConnection(Base):
+    __tablename__ = "social_connections"
+
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    platform = Column(String(50), nullable=False)  # github, leetcode, linkedin
+    username = Column(String(255), nullable=True)
+    access_token = Column(String(1000), nullable=True)  # encrypted token or cookie
+    extra_data = Column(JSON, nullable=True, default={})
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class GithubStats(Base):
+    __tablename__ = "github_stats"
+
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    login = Column(String(255), nullable=True)
+    name = Column(String(255), nullable=True)
+    avatar_url = Column(String(500), nullable=True)
+    public_repos = Column(Integer, default=0)
+    followers = Column(Integer, default=0)
+    following = Column(Integer, default=0)
+    total_commits_last_year = Column(Integer, default=0)
+    languages = Column(JSON, nullable=True, default={})
+    top_repos = Column(JSON, nullable=True, default=[])
+    contribution_streak = Column(Integer, default=0)
+    synced_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class LeetcodeStats(Base):
+    __tablename__ = "leetcode_stats"
+
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    username = Column(String(255), nullable=True)
+    real_name = Column(String(255), nullable=True)
+    avatar = Column(String(500), nullable=True)
+    ranking = Column(Integer, nullable=True)
+    reputation = Column(Integer, nullable=True)
+    total_solved = Column(Integer, default=0)
+    easy_solved = Column(Integer, default=0)
+    medium_solved = Column(Integer, default=0)
+    hard_solved = Column(Integer, default=0)
+    acceptance_rate = Column(Numeric(5, 2), default=0.0)
+    streak_days = Column(Integer, default=0)
+    total_submissions = Column(Integer, default=0)
+    contest_rating = Column(Numeric(8, 2), nullable=True)
+    contest_ranking = Column(String(50), nullable=True)
+    language_stats = Column(JSON, nullable=True, default={})
+    recent_submissions = Column(JSON, nullable=True, default=[])
+    synced_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class MockTestSession(Base):
+    __tablename__ = "mock_test_sessions"
+
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    test_type = Column(String(50), nullable=False)  # coding_only, mcq_coding
+    company = Column(String(255), nullable=True)
+    status = Column(String(50), default="in_progress")  # in_progress, completed
+    duration_minutes = Column(Integer, default=60)
+    started_at = Column(DateTime, default=datetime.datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+class MockTestQuestion(Base):
+    __tablename__ = "mock_test_questions"
+
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
+    session_id = Column(GUID, ForeignKey("mock_test_sessions.id", ondelete="CASCADE"), nullable=False)
+    category = Column(String(50), nullable=False)
+    difficulty = Column(String(50), nullable=True)
+    question_text = Column(String(2000), nullable=False)
+    title_slug = Column(String(255), nullable=True)
+    topic_tags = Column(JSON, nullable=True, default=[])
+    options = Column(JSON, nullable=True)
+    correct_answer = Column(String(50), nullable=True)
+    explanation = Column(String(4000), nullable=True)
+    url = Column(String(500), nullable=True)
+    user_answer = Column(String(5000), nullable=True)
+    is_correct = Column(Boolean, nullable=True)
+
+class MockTestResult(Base):
+    __tablename__ = "mock_test_results"
+
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
+    session_id = Column(GUID, ForeignKey("mock_test_sessions.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    test_type = Column(String(50), nullable=False)
+    company = Column(String(255), nullable=True)
+    status = Column(String(50), default="completed")
+    total_score = Column(Integer, nullable=False)
+    max_score = Column(Integer, nullable=False)
+    mcq_score = Column(Integer, nullable=False)
+    mcq_total = Column(Integer, nullable=False)
+    coding_score = Column(Integer, nullable=False)
+    coding_total = Column(Integer, nullable=False)
+    breakdown = Column(JSON, nullable=True)
+    weak_areas = Column(JSON, nullable=True, default=[])
+    recommendations = Column(JSON, nullable=True, default=[])
+    completed_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Company(Base):
+    __tablename__ = "companies"
+
+    id = Column(String(255), primary_key=True)  # slugified/id
+    name = Column(String(255), nullable=False)
+    type = Column(String(50), nullable=True)  # Dream, Super Dream, Standard
+    location = Column(String(255), nullable=True)
+    is_hiring = Column(Boolean, default=True)
+    deadline = Column(String(100), nullable=True)
+    logo = Column(String(50), nullable=True)
+    required_skills = Column(JSON, nullable=True, default={})
+    
+    # Extra Supabase fields
+    short_name = Column(String(255), nullable=True)
+    category = Column(String(255), nullable=True)
+    incorporation_year = Column(String(50), nullable=True)
+    nature_of_company = Column(String(255), nullable=True)
+    headquarters_address = Column(String(500), nullable=True)
+    office_count = Column(String(100), nullable=True)
+    employee_size = Column(String(100), nullable=True)
+    website_url = Column(String(500), nullable=True)
+    linkedin_url = Column(String(500), nullable=True)
+    twitter_handle = Column(String(255), nullable=True)
+    facebook_url = Column(String(500), nullable=True)
+    instagram_url = Column(String(500), nullable=True)
+    primary_contact_email = Column(String(255), nullable=True)
+    primary_phone_number = Column(String(100), nullable=True)
+    overview_text = Column(String(2000), nullable=True)
+    vision_statement = Column(String(2000), nullable=True)
+    mission_statement = Column(String(2000), nullable=True)
+    legal_issues = Column(String(2000), nullable=True)
+    carbon_footprint = Column(String(2000), nullable=True)
+
+class CompanyApplication(Base):
+    __tablename__ = "company_applications"
+
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    company_id = Column(String(255), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(50), default="pending")
+    applied_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class StudentTest(Base):
+    __tablename__ = "student_tests"
+
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(255), nullable=False)
+    type = Column(String(50), nullable=True)
+    description = Column(String(1000), nullable=True)
+    questions = Column(JSON, nullable=True, default=[])
+    score = Column(Integer, nullable=True)
+    total = Column(Integer, nullable=True)
+    answers = Column(JSON, nullable=True)
+    results = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+class InnovxOpportunity(Base):
+    __tablename__ = "innovx_opportunities"
+
+    id = Column(String(255), primary_key=True)
+    title = Column(String(255), nullable=False)
+    company = Column(String(255), nullable=False)
+    description = Column(String(1000), nullable=True)
+    due_date = Column(String(100), nullable=True)
+    company_avatar = Column(String(50), nullable=True)
+
+class InnovxApplication(Base):
+    __tablename__ = "innovx_applications"
+
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    opportunity_id = Column(String(255), ForeignKey("innovx_opportunities.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(50), default="pending")
+    applied_at = Column(DateTime, default=datetime.datetime.utcnow)
+

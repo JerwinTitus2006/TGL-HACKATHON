@@ -151,19 +151,24 @@ class ProfileService:
 
         resume_data = extraction.raw_llm_response or {}
         
-        # 1. Update basic profile fields best-effort if empty
-        if not candidate.name and resume_data.get("candidate_name"):
-            candidate.name = resume_data.get("candidate_name")
-        if not candidate.email and resume_data.get("email"):
-            candidate.email = resume_data.get("email")
+        # 1. Update basic profile fields with extracted info if present
+        ext_name = resume_data.get("candidate_name")
+        if ext_name and ext_name != "null" and str(ext_name).strip() != "":
+            candidate.name = ext_name.strip()
             
-        # Format education from list to string if empty
-        if not candidate.education and resume_data.get("education"):
-            edu_list = resume_data.get("education", [])
-            candidate.education = ", ".join([
+        ext_email = resume_data.get("email")
+        if ext_email and ext_email != "null" and str(ext_email).strip() != "":
+            candidate.email = ext_email.strip()
+            
+        # Format education from list to string
+        edu_list = resume_data.get("education", [])
+        if isinstance(edu_list, list) and len(edu_list) > 0:
+            edu_str = ", ".join([
                 f"{e.get('degree')} at {e.get('institution')} ({e.get('year')})"
-                for e in edu_list if e.get("degree")
+                for e in edu_list if isinstance(e, dict) and e.get("degree")
             ])
+            if edu_str.strip():
+                candidate.education = edu_str.strip()
 
         # 2. Merge skills intelligently
         existing_skills = db.query(CandidateSkill).filter(CandidateSkill.candidate_id == candidate.id).all()

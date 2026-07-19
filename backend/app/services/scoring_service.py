@@ -105,7 +105,42 @@ class ScoringService:
         # Fetch company skillsets
         benchmarks = db.query(CompanySkillset).filter(CompanySkillset.company_id == company_id).all()
         if not benchmarks:
-            raise HTTPException(status_code=404, detail=f"Benchmark data for company '{company_id}' not found")
+            from backend.app.models import Company
+            company = db.query(Company).filter(Company.id == company_id).first()
+            if not company:
+                raise HTTPException(status_code=404, detail=f"Company with ID '{company_id}' not found")
+            
+            # Map required_skills to Category codes
+            category_levels = {cat: 1 for cat in ["COD", "DSA", "OOD", "APTI", "COMM", "AI", "CLOUD", "SQL", "SWE", "SYSD", "NETW", "OS"]}
+            
+            req_skills = company.required_skills or {}
+            for skill_name, req_val in req_skills.items():
+                matched_any = False
+                for cat, keywords in IMPLICIT_MAPS.items():
+                    if any(kw in skill_name.lower() for kw in keywords):
+                        category_levels[cat] = max(category_levels[cat], req_val)
+                        matched_any = True
+                if not matched_any:
+                    category_levels["COD"] = max(category_levels["COD"], 5)
+            
+            benchmarks = []
+            for cat, lvl in category_levels.items():
+                tier = "Standard"
+                if lvl >= 8:
+                    tier = "Super Dream"
+                elif lvl >= 6:
+                    tier = "Dream"
+                
+                b = CompanySkillset(
+                    company_id=company_id,
+                    company_name=company.name,
+                    category_code=cat,
+                    required_level=lvl,
+                    required_tier=tier
+                )
+                db.add(b)
+                benchmarks.append(b)
+            db.commit()
 
         candidate_levels = cls.calculate_candidate_levels(candidate)
         

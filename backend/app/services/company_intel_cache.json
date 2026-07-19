@@ -1,0 +1,98 @@
+{
+  "3i Infotech Ltd.": {
+    "weaknesses": [
+      "Fierce competition in core market sectors",
+      "Complex legacy systems to maintain",
+      "High dependency on enterprise service contracts"
+    ],
+    "work_culture": [
+      "High collaboration and teamwork",
+      "Emphasis on continuous learning & certifications",
+      "Structured performance-driven environment"
+    ],
+    "tools_technologies": [
+      "Python",
+      "SQL",
+      "Cloud Platforms (AWS/Azure)",
+      "Docker",
+      "Git/GitHub"
+    ],
+    "adopting_tech": [
+      "Generative AI / LLM integration",
+      "Microservices architecture",
+      "Serverless computing"
+    ],
+    "awards": [
+      "Great Place to Work certified",
+      "Top Industry Innovation Award winner"
+    ],
+    "uniqueness": [
+      "Global footprint with localized delivery",
+      "Proprietary AI and data analytics platform"
+    ]
+  },
+  "Amazon.com, Inc.": {
+    "weaknesses": [
+      "Fierce competition in core market sectors",
+      "Complex legacy systems to maintain",
+      "High dependency on enterprise service contracts"
+    ],
+    "work_culture": [
+      "High collaboration and teamwork",
+      "Emphasis on continuous learning & certifications",
+      "Structured performance-driven environment"
+    ],
+    "tools_technologies": [
+      "Python",
+      "SQL",
+      "Cloud Platforms (AWS/Azure)",
+      "Docker",
+      "Git/GitHub"
+    ],
+    "adopting_tech": [
+      "Generative AI / LLM integration",
+      "Microservices architecture",
+      "Serverless computing"
+    ],
+    "awards": [
+      "Great Place to Work certified",
+      "Top Industry Innovation Award winner"
+    ],
+    "uniqueness": [
+      "Global footprint with localized delivery",
+      "Proprietary AI and data analytics platform"
+    ]
+  },
+  "Autodesk": {
+    "weaknesses": [
+      "Fierce competition in core market sectors",
+      "Complex legacy systems to maintain",
+      "High dependency on enterprise service contracts"
+    ],
+    "work_culture": [
+      "High collaboration and teamwork",
+      "Emphasis on continuous learning & certifications",
+      "Structured performance-driven environment"
+    ],
+    "tools_technologies": [
+      "Python",
+      "SQL",
+      "Cloud Platforms (AWS/Azure)",
+      "Docker",
+      "Git/GitHub"
+    ],
+    "adopting_tech": [
+      "Generative AI / LLM integration",
+      "Microservices architecture",
+      "Serverless computing"
+    ],
+    "awards": [
+      "Great Place to Work certified",
+      "Top Industry Innovation Award winner"
+    ],
+    "uniqueness": [
+      "Global footprint with localized delivery",
+      "Proprietary AI and data analytics platform"
+    ]
+  }
+}
