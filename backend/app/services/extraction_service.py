@@ -382,18 +382,35 @@ class ExtractionService:
             
             skills_data = parsed_data.get("skills", [])
             for s in skills_data:
-                cat = s.get("category_code", "OTHER").upper()
+                if isinstance(s, str):
+                    s_name = s.strip()
+                    cat = "OTHER"
+                    ev = "Found in document"
+                    conf = "high"
+                    prio = "required"
+                elif isinstance(s, dict):
+                    s_name = s.get("skill_name") or s.get("name") or s.get("skill") or ""
+                    cat = (s.get("category_code") or s.get("category") or "OTHER").upper()
+                    ev = str(s.get("evidence", ""))[:200]
+                    conf = str(s.get("confidence", "medium")).lower()
+                    prio = str(s.get("priority", "required"))
+                else:
+                    continue
+
+                if not s_name:
+                    continue
+
                 valid_cats = {"COD", "DSA", "OOD", "APTI", "COMM", "AI", "CLOUD", "SQL", "SWE", "SYSD", "NETW", "OS", "OTHER"}
                 if cat not in valid_cats:
                     cat = "OTHER"
                     
                 skill = ExtractedSkill(
                     extraction_id=extraction.id,
-                    skill_name=s.get("skill_name"),
+                    skill_name=s_name,
                     category_code=cat,
-                    evidence=s.get("evidence", "")[:200],
-                    confidence=s.get("confidence", "medium").lower(),
-                    priority=s.get("priority", "required")
+                    evidence=ev,
+                    confidence=conf,
+                    priority=prio
                 )
                 db.add(skill)
                 

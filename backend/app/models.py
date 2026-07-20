@@ -437,3 +437,17 @@ class InnovxApplication(Base):
     status = Column(String(50), default="pending")
     applied_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class ShadowRecruiterReview(Base):
+    __tablename__ = "shadow_recruiter_reviews"
+
+    id = Column(GUID, primary_key=True, default=uuid.uuid4)
+    candidate_id = Column(GUID, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False)
+    jd_extraction_id = Column(GUID, ForeignKey("extractions.id", ondelete="SET NULL"), nullable=True)
+    company_id = Column(String(255), ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
+    verdict = Column(String(1000), nullable=False)
+    rejection_risk = Column(Integer, nullable=False, default=50)
+    objections = Column(JSON, nullable=False, default=[])
+    fairness_audit = Column(JSON, nullable=False, default={})
+    computed_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+

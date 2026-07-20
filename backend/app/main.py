@@ -6,7 +6,7 @@ import requests
 from sqlalchemy import text
 from backend.app.database import SessionLocal, engine, Base, is_sqlite
 from backend.app.routers import auth, documents, profiles, talent_check, skill_match
-from backend.app.routers import ai_routes, mock_test_routes, student_routes, social_routes
+from backend.app.routers import ai_routes, mock_test_routes, student_routes, social_routes, shadow_recruiter_routes
 
 # Create database tables automatically if not present
 Base.metadata.create_all(bind=engine)
@@ -78,6 +78,7 @@ app.include_router(ai_routes.router)
 app.include_router(mock_test_routes.router)
 app.include_router(student_routes.router)
 app.include_router(social_routes.router)
+app.include_router(shadow_recruiter_routes.router)
 
 @app.get("/health", tags=["health"])
 def health_check():

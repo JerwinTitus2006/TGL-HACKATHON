@@ -16,7 +16,6 @@ import {
   Globe,
   Target,
   Briefcase,
-  Compass,
   GraduationCap,
   ChevronLeft,
   ChevronRight,
@@ -489,9 +488,6 @@ export default function App() {
   const [runCodeOutput, setRunCodeOutput] = useState<any>(null);
   const [runningCode, setRunningCode] = useState<boolean>(false);
 
-  const [innovxOpps, setInnovxOpps] = useState<any[]>([]);
-  const [innovxApps, setInnovxApps] = useState<any[]>([]);
-
   // Social Integrations (GitHub & LeetCode)
   const [socialConnections, setSocialConnections] = useState<any[]>([]);
   const [socialStats, setSocialStats] = useState<{ github: any; leetcode: any }>({ github: null, leetcode: null });
@@ -501,6 +497,13 @@ export default function App() {
   const [connectingGithub, setConnectingGithub] = useState<boolean>(false);
   const [connectingLeetcode, setConnectingLeetcode] = useState<boolean>(false);
   const [syncingSocial, setSyncingSocial] = useState<boolean>(false);
+
+  // Shadow Recruiter (Adversarial Screening Agent) State
+  const [shadowReview, setShadowReview] = useState<any>(null);
+  const [shadowHistory, setShadowHistory] = useState<any[]>([]);
+  const [shadowCompanyId, setShadowCompanyId] = useState<string>('');
+  const [shadowJdId, setShadowJdId] = useState<string>('');
+  const [runningShadowReview, setRunningShadowReview] = useState<boolean>(false);
 
   // Generic loading & messages
   const [loading, setLoading] = useState<boolean>(false);
@@ -522,9 +525,9 @@ export default function App() {
       fetchTalentHistory();
       fetchMatchHistory();
       fetchStudentDashboard();
-      fetchInnovXData();
       fetchMockTestHistory();
       fetchSocialConnections();
+      fetchShadowReviews();
     }
   }, [token]);
 
@@ -814,6 +817,42 @@ export default function App() {
     }
   };
 
+  const fetchShadowReviews = async () => {
+    try {
+      const res = await apiCall('/shadow-recruiter/reviews').catch(() => ({ reviews: [] }));
+      const reviewsList = res.reviews || [];
+      setShadowHistory(reviewsList);
+      if (reviewsList.length > 0) {
+        setShadowReview(reviewsList[0]);
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch shadow recruiter reviews:", err);
+    }
+  };
+
+  const handleRunShadowReview = async () => {
+    setRunningShadowReview(true);
+    try {
+      const payload: any = {};
+      if (shadowCompanyId) payload.company_id = shadowCompanyId;
+      if (shadowJdId) payload.jd_extraction_id = shadowJdId;
+
+      const review = await apiCall('/shadow-recruiter/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      setShadowReview(review);
+      triggerMessage('success', 'Shadow Recruiter screening review generated!');
+      await fetchShadowReviews();
+    } catch (err: any) {
+      triggerMessage('error', err.message || 'Shadow Recruiter review failed.');
+    } finally {
+      setRunningShadowReview(false);
+    }
+  };
+
   const fetchCompanies = async () => {
     try {
       const data = await apiCall('/talent-check/companies');
@@ -853,14 +892,6 @@ export default function App() {
       setHiringCompanies(data.hiring_companies || []);
       setAssignedCompanies(data.assigned_companies || []);
       setPlacementStats(data.stats || null);
-    } catch (err) {}
-  };
-
-  const fetchInnovXData = async () => {
-    try {
-      const data = await apiCall('/student/innovx');
-      setInnovxOpps(data.opportunities || []);
-      setInnovxApps(data.applications || []);
     } catch (err) {}
   };
 
@@ -981,21 +1012,6 @@ export default function App() {
       });
       triggerMessage('success', res.message || `Successfully applied to company.`);
       await fetchStudentDashboard();
-    } catch (err: any) {
-      triggerMessage('error', err.message || 'Application failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleApplyInnovx = async (opportunityId: string) => {
-    setLoading(true);
-    try {
-      const res = await apiCall(`/student/innovx/${opportunityId}/apply`, {
-        method: 'POST'
-      });
-      triggerMessage('success', res.message || `Successfully applied to InnovX opportunity.`);
-      await fetchInnovXData();
     } catch (err: any) {
       triggerMessage('error', err.message || 'Application failed');
     } finally {
@@ -1522,7 +1538,7 @@ export default function App() {
             { id: 'skill-match', label: 'Skill Matcher', icon: Award },
             { id: 'placement-hub', label: 'Placement Hub', icon: Briefcase },
             { id: 'mock-test', label: 'Mock Test', icon: GraduationCap },
-            { id: 'innov-x', label: 'Innov X', icon: Compass },
+            { id: 'shadow-recruiter', label: 'Shadow Recruiter', icon: AlertTriangle },
             { id: 'history', label: 'System Logs', icon: History }
           ].map(tab => {
             const Icon = tab.icon;
@@ -1608,7 +1624,7 @@ export default function App() {
               { id: 'skill-match', label: 'Skill Matcher', icon: Award },
               { id: 'placement-hub', label: 'Placement Hub', icon: Briefcase },
               { id: 'mock-test', label: 'Mock Test', icon: GraduationCap },
-              { id: 'innov-x', label: 'Innov X', icon: Compass },
+              { id: 'shadow-recruiter', label: 'Shadow Recruiter', icon: AlertTriangle },
               { id: 'history', label: 'System Logs', icon: History }
             ].map(tab => {
               const Icon = tab.icon;
@@ -4504,104 +4520,336 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab: Innov X */}
-        {currentTab === 'innov-x' && (
+        {/* Tab: The Shadow Recruiter (Adversarial Screening Agent) */}
+        {(currentTab === 'shadow-recruiter' || currentTab === 'innov-x') && (
           <div className="animate-slide-up" style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-            <div>
-              <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '32px' }}>Innov X</h1>
-              <p style={{ color: 'var(--color-text-muted)' }}>Corporate Innovation Radar and Open Hackathon Challenges</p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: '28px', alignItems: 'start' }}>
-              
-              {/* Opportunities list */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 800 }}>Open Innovation Calls</h3>
-                
-                {innovxOpps.length === 0 ? (
-                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-muted)', border: '1px dashed var(--grey-800)' }}>
-                    No innovation opportunities currently posted.
+            {/* Header Banner */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+                  <div style={{ width: '36px', height: '36px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <AlertTriangle size={20} color="#F87171" />
                   </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {innovxOpps.map((opp) => (
-                      <div key={opp.id} className="glass-card" style={{ padding: '24px', display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-                        <div style={{ 
-                          width: '45px', 
-                          height: '45px', 
-                          background: 'var(--black-void)', 
-                          border: '1px solid var(--grey-800)', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          fontWeight: 'bold',
-                          color: 'var(--white-pure)',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '18px'
-                        }}>
-                          {opp.company_avatar || opp.company[0]}
-                        </div>
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)' }}>{opp.company.toUpperCase()}</span>
-                            <span style={{ fontSize: '11px', color: 'var(--grey-400)' }}>Deadline: {opp.due_date}</span>
-                          </div>
-                          <h4 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--white-pure)' }}>{opp.title}</h4>
-                          <p style={{ fontSize: '13px', color: 'var(--grey-300)', lineHeight: '1.5' }}>{opp.description}</p>
-                          <div style={{ marginTop: '12px' }}>
-                            <button
-                              onClick={() => handleApplyInnovx(opp.id)}
-                              disabled={loading || opp.has_applied}
-                              className={opp.has_applied ? "btn-secondary" : "btn-primary"}
-                              style={{ padding: '8px 16px', fontSize: '12px' }}
-                            >
-                              {opp.has_applied ? 'Applied' : 'Register / Apply'}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  <div>
+                    <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '32px', color: 'var(--white-pure)' }}>The Shadow Recruiter</h1>
+                    <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                      Adversarial Screening Agent • 2-Node LangGraph Audit
+                    </span>
                   </div>
-                )}
+                </div>
+                <p style={{ color: 'var(--color-text-muted)', fontSize: '14px', maxWidth: '720px', marginTop: '6px' }}>
+                  A skeptical, time-pressured human screener who has 30 seconds to find reasons to reject your resume. Flags vague claims, missing metrics, and unevidenced skills before a real recruiter sees them.
+                </p>
               </div>
 
-              {/* Submissions & applications status */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 800 }}>My Innovations Dashboard</h3>
-                
-                <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <span className="eyebrow-label" style={{ fontSize: '9px' }}>INNOVX APPLICATIONS</span>
-                  {innovxApps.length === 0 ? (
-                    <div style={{ fontSize: '12px', color: 'var(--grey-400)', fontStyle: 'italic' }}>
-                      No active applications or submissions.
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button
+                  onClick={handleRunShadowReview}
+                  disabled={runningShadowReview}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    background: 'var(--white-pure)',
+                    color: '#000000',
+                    border: 'none',
+                    padding: '12px 20px',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'var(--transition-smooth)'
+                  }}
+                >
+                  <RefreshCw size={16} className={runningShadowReview ? 'spin' : ''} />
+                  {runningShadowReview ? 'Screening Resume...' : 'Run Shadow Screening Audit'}
+                </button>
+              </div>
+            </div>
+
+            {/* Target Screening Controls */}
+            <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--grey-400)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Screening Target & Rigor Context
+              </span>
+
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '16px', alignItems: 'center' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', marginBottom: '6px' }}>
+                    Target Company Benchmark
+                  </label>
+                  <select
+                    value={shadowCompanyId}
+                    onChange={(e) => setShadowCompanyId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      background: 'var(--black-void)',
+                      border: '1px solid var(--grey-800)',
+                      color: 'var(--white-pure)',
+                      padding: '10px 12px',
+                      fontSize: '13px',
+                      fontFamily: 'var(--font-mono)'
+                    }}
+                  >
+                    <option value="">Standard Screening Bar (Generic)</option>
+                    {companies.map(c => (
+                      <option key={c.company_id || c.id} value={c.company_id || c.id}>
+                        {c.name} ({c.required_tier || 'CR'} Tier Rigor)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', marginBottom: '6px' }}>
+                    Target Job Description (JD)
+                  </label>
+                  <select
+                    value={shadowJdId}
+                    onChange={(e) => setShadowJdId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      background: 'var(--black-void)',
+                      border: '1px solid var(--grey-800)',
+                      color: 'var(--white-pure)',
+                      padding: '10px 12px',
+                      fontSize: '13px',
+                      fontFamily: 'var(--font-mono)'
+                    }}
+                  >
+                    <option value="">No Target JD (General Screening)</option>
+                    {jdExtractionsList.map(jd => (
+                      <option key={jd.extraction_id || jd.id} value={jd.extraction_id || jd.id}>
+                        {jd.filename || jd.title || 'Uploaded JD'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '18px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)' }}>
+                    Fairness Guard Status:
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#10B981', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                    ● Active (Grounding & Bias Filtered)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Active Screening Review Dashboard */}
+            {shadowReview ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {/* First 30 Seconds Verdict Banner */}
+                <div style={{
+                  background: 'var(--black-elevated)',
+                  borderLeft: '4px solid #F87171',
+                  borderTop: '1px solid var(--grey-800)',
+                  borderRight: '1px solid var(--grey-800)',
+                  borderBottom: '1px solid var(--grey-800)',
+                  padding: '24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: '#F87171', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700 }}>
+                    First 30 Seconds Screener Verdict
+                  </span>
+                  <p style={{ fontSize: '18px', fontWeight: 700, color: 'var(--white-pure)', lineHeight: '1.5', margin: 0 }}>
+                    "{shadowReview.first_30_seconds_verdict}"
+                  </p>
+                </div>
+
+                {/* Score Cards Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.5fr 1fr 1fr', gap: '16px' }}>
+                  {/* Rejection Risk Gauge */}
+                  <div className="glass-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                    <div style={{
+                      width: '70px',
+                      height: '70px',
+                      borderRadius: '50%',
+                      background: shadowReview.overall_rejection_risk > 65 ? 'rgba(239, 68, 68, 0.2)' : shadowReview.overall_rejection_risk > 35 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                      border: `3px solid ${shadowReview.overall_rejection_risk > 65 ? '#EF4444' : shadowReview.overall_rejection_risk > 35 ? '#F59E0B' : '#10B981'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'column'
+                    }}>
+                      <span style={{ fontSize: '22px', fontWeight: 800, color: shadowReview.overall_rejection_risk > 65 ? '#EF4444' : shadowReview.overall_rejection_risk > 35 ? '#F59E0B' : '#10B981' }}>
+                        {shadowReview.overall_rejection_risk}%
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Overall Rejection Risk</span>
+                      <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--white-pure)', marginTop: '2px' }}>
+                        {shadowReview.overall_rejection_risk > 65 ? 'High Screening Risk' : shadowReview.overall_rejection_risk > 35 ? 'Moderate Screening Risk' : 'Low Screening Risk'}
+                      </h4>
+                      <p style={{ fontSize: '12px', color: 'var(--grey-400)', marginTop: '2px' }}>Higher score indicates higher risk of initial screen out.</p>
+                    </div>
+                  </div>
+
+                  {/* Objections Found */}
+                  <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Flagged Objections</span>
+                    <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--white-pure)', marginTop: '4px' }}>
+                      {shadowReview.objections?.length || 0}
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--grey-400)', marginTop: '2px' }}>Categorized by severity</span>
+                  </div>
+
+                  {/* Fairness Audit Badge */}
+                  <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '11px', color: '#10B981', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Fairness Guard Audit</span>
+                    <div style={{ fontSize: '28px', fontWeight: 800, color: '#10B981', marginTop: '4px' }}>
+                      {shadowReview.fairness_audit?.objections_removed || 0} Struck
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--grey-400)', marginTop: '2px' }}>Unsubstantiated / biased objections removed</span>
+                  </div>
+                </div>
+
+                {/* Objections List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--white-pure)' }}>Screener Objections & Actionable Fixes</h3>
+                    <span style={{ fontSize: '12px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)' }}>Sorted by severity</span>
+                  </div>
+
+                  {!shadowReview.objections || shadowReview.objections.length === 0 ? (
+                    <div className="glass-card" style={{ padding: '24px', textAlign: 'center', color: '#10B981' }}>
+                      No major red flags or objections detected! Your profile text is well-grounded and quantified.
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {innovxApps.map((a) => (
-                        <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--grey-900)', paddingBottom: '10px' }}>
-                          <div>
-                            <strong style={{ fontSize: '13px', color: 'var(--white-pure)', display: 'block' }}>{a.title}</strong>
-                            <span style={{ fontSize: '11px', color: 'var(--grey-400)' }}>{a.company} | {new Date(a.applied_at).toLocaleDateString()}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      {shadowReview.objections.map((obj: any, idx: number) => (
+                        <div
+                          key={obj.objection_id || idx}
+                          style={{
+                            background: 'var(--black-elevated)',
+                            border: '1px solid var(--grey-800)',
+                            borderLeft: `4px solid ${obj.severity === 'high' ? '#EF4444' : obj.severity === 'medium' ? '#F59E0B' : 'var(--grey-500)'}`,
+                            padding: '20px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '12px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{
+                                fontSize: '10px',
+                                fontFamily: 'var(--font-mono)',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                padding: '3px 8px',
+                                background: obj.severity === 'high' ? 'rgba(239, 68, 68, 0.2)' : obj.severity === 'medium' ? 'rgba(245, 158, 11, 0.2)' : 'var(--black-void)',
+                                color: obj.severity === 'high' ? '#EF4444' : obj.severity === 'medium' ? '#F59E0B' : 'var(--grey-300)',
+                                border: `1px solid ${obj.severity === 'high' ? 'rgba(239, 68, 68, 0.4)' : obj.severity === 'medium' ? 'rgba(245, 158, 11, 0.4)' : 'var(--grey-700)'}`
+                              }}>
+                                {obj.severity.toUpperCase()} SEVERITY
+                              </span>
+                              <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--white-pure)', fontWeight: 600 }}>
+                                Category: {obj.category.replace('_', ' ')}
+                              </span>
+                            </div>
+
+                            <span style={{ fontSize: '11px', color: 'var(--grey-500)', fontFamily: 'var(--font-mono)' }}>
+                              ID: #{obj.objection_id || idx + 1}
+                            </span>
                           </div>
-                          <span style={{ 
-                            fontSize: '9px', 
-                            background: 'var(--black-void)', 
-                            border: '1px solid var(--grey-800)', 
-                            color: 'var(--white-primary)',
-                            padding: '2px 6px',
-                            fontFamily: 'var(--font-mono)',
-                            textTransform: 'uppercase'
-                          }}>
-                            {a.status}
-                          </span>
+
+                          {/* Quoted Text */}
+                          <div style={{ background: 'var(--black-void)', border: '1px solid var(--grey-850)', padding: '12px', fontSize: '13px', color: 'var(--grey-300)', fontStyle: 'italic' }}>
+                            "{obj.quote}"
+                          </div>
+
+                          {/* Screener Private Note */}
+                          <div>
+                            <span style={{ fontSize: '10px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Screener Note</span>
+                            <p style={{ fontSize: '14px', color: 'var(--white-pure)', marginTop: '2px', lineHeight: '1.4' }}>
+                              {obj.reasoning}
+                            </p>
+                          </div>
+
+                          {/* Suggested Fix */}
+                          <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontSize: '10px', color: '#10B981', fontFamily: 'var(--font-mono)', fontWeight: 700, textTransform: 'uppercase' }}>Actionable Fix</span>
+                            <p style={{ fontSize: '13px', color: 'var(--white-pure)', margin: 0, lineHeight: '1.4' }}>
+                              {obj.suggested_fix}
+                            </p>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-              </div>
 
-            </div>
+                {/* Review History */}
+                {shadowHistory.length > 1 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--white-pure)' }}>Audit History & Risk Score Progress</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {shadowHistory.slice(1, 6).map((h: any, idx: number) => (
+                        <div
+                          key={h.review_id || idx}
+                          onClick={() => setShadowReview(h)}
+                          style={{
+                            background: 'var(--black-elevated)',
+                            border: '1px solid var(--grey-800)',
+                            padding: '12px 16px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--grey-400)' }}>
+                              {h.computed_at ? h.computed_at.slice(0, 10) : 'Past Audit'}
+                            </span>
+                            <span style={{ fontSize: '13px', color: 'var(--white-pure)', fontWeight: 600 }}>
+                              "{h.first_30_seconds_verdict.slice(0, 70)}..."
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: h.overall_rejection_risk > 65 ? '#EF4444' : '#10B981' }}>
+                              Risk: {h.overall_rejection_risk}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Empty State */
+              <div className="glass-card" style={{ padding: '40px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'var(--black-void)', border: '1px solid var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <AlertTriangle size={24} color="var(--grey-400)" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--white-pure)' }}>No Active Screening Review</h3>
+                  <p style={{ fontSize: '13px', color: 'var(--grey-400)', maxWidth: '480px', marginTop: '4px' }}>
+                    Click <strong>Run Shadow Screening Audit</strong> above to execute the two-node Critic and Fairness Guard screening pipeline against your resume.
+                  </p>
+                </div>
+                <button
+                  onClick={handleRunShadowReview}
+                  disabled={runningShadowReview}
+                  style={{
+                    background: 'var(--white-pure)',
+                    color: '#000000',
+                    border: 'none',
+                    padding: '10px 20px',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {runningShadowReview ? 'Screening...' : 'Run Shadow Screening Audit'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
