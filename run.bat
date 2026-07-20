@@ -89,10 +89,10 @@ echo.
 echo [*] Starting RADIX Backend (FastAPI)...
 if not "!ACTIVATE_CMD!"=="" (
     echo [+] Detected Virtual Environment: !ACTIVATE_CMD!
-    start "RADIX Backend (FastAPI)" cmd /k "title RADIX Backend (FastAPI) && !ACTIVATE_CMD! && python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000"
+    start "RADIX Backend (FastAPI)" cmd /k "title RADIX Backend (FastAPI) && !ACTIVATE_CMD! && python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload"
 ) else (
     echo [-] No virtual environment detected. Running with global Python.
-    start "RADIX Backend (FastAPI)" cmd /k "title RADIX Backend (FastAPI) && python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000"
+    start "RADIX Backend (FastAPI)" cmd /k "title RADIX Backend (FastAPI) && python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload"
 )
 
 :: Wait a brief moment before starting frontend

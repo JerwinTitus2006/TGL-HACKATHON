@@ -153,10 +153,12 @@ async def fetch_leetcode_profile(username: str, session_cookie: str | None = Non
     query getUserProfile($username: String!) {
       matchedUser(username: $username) {
         username
-        realName
-        avatar
-        ranking
-        reputation
+        profile {
+          realName
+          userAvatar
+          ranking
+          reputation
+        }
         submitStats: submitStatsGlobal {
           acSubmissionNum {
             difficulty
@@ -185,10 +187,6 @@ async def fetch_leetcode_profile(username: str, session_cookie: str | None = Non
         globalRanking
         totalParticipants
         topPercentage
-        contest {
-          title
-          startTime
-        }
       }
     }
     """
@@ -200,44 +198,63 @@ async def fetch_leetcode_profile(username: str, session_cookie: str | None = Non
         titleSlug
         timestamp
         status
-        difficulty
       }
     }
     """
 
     vars = {"username": username}
 
+    # 1. Primary profile query
     try:
         profile_data = await _leetcode_query(profile_query, vars, session_cookie)
-        lang_data = await _leetcode_query(language_query, vars, session_cookie)
-        contest_data = await _leetcode_query(contest_query, vars, session_cookie)
-        sub_data = await _leetcode_query(submission_query, {**vars, "limit": 50}, session_cookie)
     except Exception as e:
-        # Graceful fallback mock values if LeetCode GraphQL is down or cookie invalid
-        raise HTTPException(status_code=400, detail=f"Failed to fetch from LeetCode API: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to fetch LeetCode profile for '{username}': {str(e)}")
 
-    mu = profile_data.get("matchedUser") or {}
+    mu = profile_data.get("matchedUser")
+    if not mu:
+        raise HTTPException(status_code=404, detail=f"LeetCode user '{username}' not found.")
+
+    prof = mu.get("profile") or {}
     submit_stats = (mu.get("submitStats") or {}).get("acSubmissionNum") or []
-    difficulty_map = {item["difficulty"].lower(): item["count"] for item in submit_stats}
+    difficulty_map = {item["difficulty"].lower(): item["count"] for item in submit_stats if item.get("difficulty") != "All"}
 
-    languages = lang_data.get("matchedUser") or {}
-    lang_stats = {
-        item["languageName"]: item["problemsSolved"]
-        for item in (languages.get("languageProblemCount") or [])
-    }
+    # 2. Language stats (optional)
+    lang_stats = {}
+    try:
+        lang_data = await _leetcode_query(language_query, vars, session_cookie)
+        languages = lang_data.get("matchedUser") or {}
+        lang_stats = {
+            item["languageName"]: item["problemsSolved"]
+            for item in (languages.get("languageProblemCount") or [])
+        }
+    except Exception:
+        pass
 
-    contest = contest_data.get("userContestRanking") or {}
-    submissions = sub_data.get("recentSubmissionList") or []
+    # 3. Contest ranking (optional)
+    contest = {}
+    try:
+        contest_data = await _leetcode_query(contest_query, vars, session_cookie)
+        contest = contest_data.get("userContestRanking") or {}
+    except Exception:
+        pass
+
+    # 4. Recent submissions (optional)
+    submissions = []
+    try:
+        sub_data = await _leetcode_query(submission_query, {**vars, "limit": 50}, session_cookie)
+        submissions = sub_data.get("recentSubmissionList") or []
+    except Exception:
+        pass
 
     total_accepted = sum(difficulty_map.values())
     streak = _calculate_leetcode_streak(submissions)
 
     return {
         "username": mu.get("username", username),
-        "real_name": mu.get("realName"),
-        "avatar": mu.get("avatar"),
-        "ranking": contest.get("globalRanking") or mu.get("ranking"),
-        "reputation": mu.get("reputation"),
+        "real_name": prof.get("realName"),
+        "avatar": prof.get("userAvatar"),
+        "ranking": contest.get("globalRanking") or prof.get("ranking"),
+        "reputation": prof.get("reputation", 0),
         "total_solved": total_accepted,
         "easy_solved": difficulty_map.get("easy", 0),
         "medium_solved": difficulty_map.get("medium", 0),
@@ -255,7 +272,7 @@ async def fetch_leetcode_profile(username: str, session_cookie: str | None = Non
 def _calculate_leetcode_streak(submissions: list[dict]) -> int:
     if not submissions:
         return 0
-    dates = sorted({datetime.fromtimestamp(s["timestamp"]).date().isoformat() for s in submissions}, reverse=True)
+    dates = sorted({datetime.fromtimestamp(int(s["timestamp"])).date().isoformat() for s in submissions if "timestamp" in s}, reverse=True)
     streak = 0
     today = datetime.now(timezone.utc).date()
     for i, d in enumerate(dates):
