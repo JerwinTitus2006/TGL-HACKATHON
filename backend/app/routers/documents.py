@@ -29,19 +29,30 @@ async def upload_document(
     ).first()
     
     if user_doc:
-        # Check if it has a completed extraction
+        # Check if it has a completed extraction with extracted skills
         extraction = db.query(Extraction).filter(
             Extraction.document_id == user_doc.id,
             Extraction.status == "completed"
         ).first()
         
+        has_valid_extraction = False
+        if extraction and len(extraction.skills) > 0:
+            has_valid_extraction = True
+        elif extraction:
+            # Refresh stale 0-skill extraction automatically
+            try:
+                extraction = ExtractionService.extract_document(db, user_doc.id, force=True)
+                has_valid_extraction = len(extraction.skills) > 0
+            except Exception:
+                pass
+        
         return {
-            "message": "File already uploaded (cache hit)",
+            "message": "File uploaded successfully (cache hit)",
             "document_id": user_doc.id,
             "filename": user_doc.source_file_name,
             "hash": user_doc.source_hash,
             "doc_type": user_doc.doc_type,
-            "has_extraction": extraction is not None,
+            "has_extraction": has_valid_extraction,
             "extraction_id": extraction.id if extraction else None
         }
 
@@ -80,7 +91,7 @@ async def upload_document(
     db.commit()
     db.refresh(doc)
     
-    # 5. Structural cache hit: check if a completed extraction exists for this file hash
+    # 5. Structural cache hit: check if a completed extraction exists with skills
     other_completed_extraction = db.query(Extraction).filter(
         Extraction.status == "completed"
     ).join(Document).filter(
@@ -90,7 +101,7 @@ async def upload_document(
     has_extraction = False
     extraction_id = None
     
-    if other_completed_extraction:
+    if other_completed_extraction and len(other_completed_extraction.skills) > 0:
         # Clone extraction metadata for this user
         new_extraction = Extraction(
             document_id=doc.id,
@@ -181,15 +192,36 @@ def extract_document(
         "raw_text_ref": doc.storage_ref
     }
     
-    # If it is a resume, add structured fields
-    if doc.doc_type == "resume" and isinstance(extraction.raw_llm_response, dict):
-        res.update({
-            "candidate_name": extraction.raw_llm_response.get("candidate_name"),
-            "email": extraction.raw_llm_response.get("email"),
-            "education": extraction.raw_llm_response.get("education", []),
-            "projects": extraction.raw_llm_response.get("projects", []),
-            "experience": extraction.raw_llm_response.get("experience", [])
-        })
+    # If it is a resume, add structured fields and auto-merge to Candidate profile
+    if doc.doc_type == "resume":
+        if isinstance(extraction.raw_llm_response, dict):
+            res.update({
+                "candidate_name": extraction.raw_llm_response.get("candidate_name"),
+                "email": extraction.raw_llm_response.get("email"),
+                "education": extraction.raw_llm_response.get("education", []),
+                "projects": extraction.raw_llm_response.get("projects", []),
+                "experience": extraction.raw_llm_response.get("experience", [])
+            })
+            
+        # Automatically sync extracted skills into Candidate profile
+        try:
+            from backend.app.models import Candidate
+            from backend.app.services.profile_service import ProfileService
+            candidate = db.query(Candidate).filter(Candidate.user_id == current_user.id).first()
+            if not candidate:
+                candidate = Candidate(
+                    user_id=current_user.id,
+                    name=res.get("candidate_name") or current_user.email.split("@")[0].title(),
+                    email=res.get("email") or current_user.email,
+                    version=1
+                )
+                db.add(candidate)
+                db.commit()
+                db.refresh(candidate)
+            
+            ProfileService.merge_resume_extraction(db, candidate.id, extraction.id)
+        except Exception as merge_err:
+            print(f"[Auto-Merge Resume Extraction] Warning: {merge_err}")
         
     return res
 

@@ -119,44 +119,35 @@ def batch_semantic_match_openrouter(jd_skills: list[str], cand_skills: list[str]
         "HTTP-Referer": "https://github.com/JerwinTitus2006/Radix",
         "X-Title": "RADIX Talent Match"
     }
-    data = {
-        "model": "google/gemini-2.5-flash",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1,
-        "max_tokens": 400
-    }
-    try:
-        response = requests.post(url, json=data, headers=headers, timeout=15)
-        if response.status_code == 402:
-            print("[Self-Healing] Credit limit hit (402) in semantic match. Retrying with free model google/gemini-2.5-flash:free")
-            data["model"] = "google/gemini-2.5-flash:free"
+    
+    models_to_try = [
+        "openrouter/free",
+        "google/gemma-4-31b-it:free",
+        "nvidia/nemotron-3-nano-30b-a3b:free",
+        "google/gemini-2.5-flash",
+        "meta-llama/llama-3.3-70b-instruct"
+    ]
+    
+    for m in models_to_try:
+        data = {
+            "model": m,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+            "max_tokens": 300
+        }
+        try:
             response = requests.post(url, json=data, headers=headers, timeout=15)
-            if response.status_code != 200:
-                try:
-                    import re
-                    err_json = response.json() if response.status_code == 402 else {}
-                    msg = err_json.get("error", {}).get("message", "")
-                    match = re.search(r"can only afford (\d+)", msg)
-                    if match:
-                        affordable = int(match.group(1))
-                        data["max_tokens"] = max(100, affordable - 10)
-                        data["model"] = "google/gemini-2.5-flash"
-                        print(f"[Self-Healing] Free model failed. Retrying with reduced max_tokens={data['max_tokens']}")
-                        response = requests.post(url, json=data, headers=headers, timeout=15)
-                except Exception:
-                    pass
-        if response.status_code == 200:
-            res_json = response.json()
-            content = res_json.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-            # Clean JSON if wrapped in markdown code blocks
-            if content.startswith("```"):
-                lines = content.split("\n")
-                if len(lines) > 2:
-                    content = "\n".join(lines[1:-1])
-            content = content.strip()
-            return json.loads(content)
-    except Exception as e:
-        print(f"[OpenRouter Match Fallback] Error: {e}")
+            if response.status_code == 200:
+                res_json = response.json()
+                content = res_json.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                if content.startswith("```"):
+                    lines = content.split("\n")
+                    if len(lines) > 2:
+                        content = "\n".join(lines[1:-1])
+                content = content.strip()
+                return json.loads(content)
+        except Exception as e:
+            print(f"[OpenRouter Match Fallback] Model {m} failed: {e}")
     return {}
 
 def batch_semantic_match_local(jd_skills: list[str], cand_skills: list[str]) -> dict[str, str]:
@@ -250,6 +241,24 @@ class MatchService:
             raise HTTPException(status_code=404, detail="JD Extraction not found")
             
         candidate_skills = db.query(CandidateSkill).filter(CandidateSkill.candidate_id == candidate.id).all()
+        
+        # If candidate has no skills in CandidateSkill table, try auto-merging from candidate's latest completed resume extraction
+        if not candidate_skills:
+            from backend.app.models import Document
+            from backend.app.services.profile_service import ProfileService
+            latest_resume_ext = db.query(Extraction).join(Document).filter(
+                Document.owner_id == candidate.user_id,
+                Document.doc_type == "resume",
+                Extraction.status == "completed"
+            ).order_by(Extraction.extracted_at.desc()).first()
+            
+            if latest_resume_ext:
+                try:
+                    ProfileService.merge_resume_extraction(db, candidate.id, latest_resume_ext.id)
+                    candidate_skills = db.query(CandidateSkill).filter(CandidateSkill.candidate_id == candidate.id).all()
+                except Exception as merge_err:
+                    print(f"[MatchService] Auto-merge failed: {merge_err}")
+
         jd_skills = db.query(ExtractedSkill).filter(ExtractedSkill.extraction_id == jd_extraction.id).all()
         
         if not jd_skills:

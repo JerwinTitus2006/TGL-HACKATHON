@@ -184,14 +184,26 @@ SKILL_ONTOLOGY: Dict[SkillCategory, Dict[str, List[str]]] = {
         "Neo4j": ["neo4j"],
     },
     SkillCategory.CLOUD_DEVOPS: {
-        "AWS": ["aws", "amazon web services", "ec2", "s3", "lambda"],
+        "AWS": ["aws", "amazon web services"],
+        "Amazon EC2": ["amazon ec2", "ec2"],
+        "Amazon S3": ["amazon s3", "s3"],
+        "AWS Lambda": ["aws lambda", "lambda"],
+        "AWS EKS": ["eks"],
+        "AWS IAM": ["iam"],
+        "AWS VPC": ["vpc"],
+        "CloudWatch": ["cloudwatch"],
         "Azure": ["azure", "microsoft azure"],
         "Google Cloud Platform": ["gcp", "google cloud", "google cloud platform"],
         "Docker": ["docker", "containerization"],
         "Kubernetes": ["kubernetes", "k8s"],
+        "Helm": ["helm"],
+        "Infrastructure as Code": ["infrastructure as code", "iac"],
         "Terraform": ["terraform"],
         "Ansible": ["ansible"],
         "Jenkins": ["jenkins"],
+        "GitLab": ["gitlab"],
+        "Prometheus": ["prometheus"],
+        "Grafana": ["grafana"],
         "CI/CD": ["ci/cd", "ci-cd", "continuous integration", "continuous deployment"],
         "Linux": ["linux", "ubuntu", "debian", "centos"],
         "Git": ["git", "github", "gitlab", "bitbucket"],
@@ -648,16 +660,41 @@ class ResumeJDParserModel:
 
     @classmethod
     def _extract_name(cls, lines: List[str], file_name: str) -> str:
-        for line in lines[:3]:
-            # Simple heuristic: 2 to 4 words, capitalized letters, no digits or symbols
-            words = line.split()
-            if 2 <= len(words) <= 4 and all(w.isalpha() or w.endswith(".") for w in words):
-                if line.lower() not in cls.ENGLISH_STOPWORDS:
-                    return line.title()
+        SECTION_KEYWORDS = {"skills", "education", "contact", "profile", "work experience", "experience", "projects", "certifications", "summary", "about me", "dev ops", "devops"}
+        NAME_BLACKLIST = {
+            "linux", "system", "administration", "development", "engineering", "infrastructure", "pipeline", "scripting", 
+            "management", "architecture", "security", "database", "networking", "computing", "cloud", "software", 
+            "developer", "engineer", "senior", "junior", "lead", "full", "stack", "intern", "associate", "analyst", 
+            "consultant", "specialist", "code", "data", "prometheus", "grafana", "python", "rust", "docker", "terraform",
+            "ansible", "kubernetes", "helm", "aws", "ec2", "s3", "lambda", "rds", "eks", "iam", "vpc", "cloudwatch"
+        }
+        for i in range(min(len(lines), 30)):
+            clean_l = lines[i].strip()
+            if clean_l.lower() in SECTION_KEYWORDS or len(clean_l) < 2:
+                continue
+            if "@" in clean_l or ":" in clean_l or "," in clean_l or any(char.isdigit() for char in clean_l):
+                continue
+                
+            words = clean_l.split()
+            if 1 <= len(words) <= 3 and all(w.isalpha() or w.endswith(".") for w in words):
+                if not any(bw in clean_l.lower().split() for bw in NAME_BLACKLIST):
+                    candidate_words = list(words)
+                    if i + 1 < len(lines):
+                        next_l = lines[i+1].strip()
+                        next_words = next_l.split()
+                        if 1 <= len(next_words) <= 2 and all(w.isalpha() or w.endswith(".") for w in next_words):
+                            if next_l.lower() not in SECTION_KEYWORDS and not any(bw in next_l.lower().split() for bw in NAME_BLACKLIST):
+                                if not ("@" in next_l or ":" in next_l or "," in next_l or any(char.isdigit() for char in next_l)):
+                                    candidate_words.extend(next_words)
+                    
+                    if 2 <= len(candidate_words) <= 4:
+                        full_name_str = " ".join(candidate_words)
+                        if full_name_str.lower() not in cls.ENGLISH_STOPWORDS:
+                            return full_name_str.title() if full_name_str.isupper() else full_name_str
         if file_name:
             clean_fn = re.sub(r"(?i)\b(resume|cv|profile|doc|pdf|docx)\b", "", file_name)
             clean_fn = re.sub(r"[-_.]", " ", os.path.splitext(clean_fn)[0]).strip()
-            if clean_fn:
+            if clean_fn and clean_fn.lower() not in SECTION_KEYWORDS:
                 return clean_fn.title()
         return "Candidate Name"
 

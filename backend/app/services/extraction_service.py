@@ -56,21 +56,47 @@ def extract_document_locally_fallback(text: str, doc_type: str, file_name: str) 
     
     # 2. Guess Candidate Name (best effort)
     guessed_name = ""
+    SECTION_KEYWORDS = {"skills", "education", "contact", "profile", "work experience", "experience", "projects", "certifications", "summary", "about me", "dev ops", "devops"}
+    NAME_BLACKLIST = {
+        "linux", "system", "administration", "development", "engineering", "infrastructure", "pipeline", "scripting", 
+        "management", "architecture", "security", "database", "networking", "computing", "cloud", "software", 
+        "developer", "engineer", "senior", "junior", "lead", "full", "stack", "intern", "associate", "analyst", 
+        "consultant", "specialist", "code", "data", "prometheus", "grafana", "python", "rust", "docker", "terraform",
+        "ansible", "kubernetes", "helm", "aws", "ec2", "s3", "lambda", "rds", "eks", "iam", "vpc", "cloudwatch"
+    }
     if doc_type == "resume":
-        # Check first 3 lines for a line with 2-3 words that are all alphabetical
-        for line in lines[:3]:
-            words = line.split()
-            if 2 <= len(words) <= 3 and all(w.isalpha() for w in words):
-                guessed_name = line
-                break
+        for i in range(min(len(lines), 30)):
+            clean_l = lines[i].strip()
+            if clean_l.lower() in SECTION_KEYWORDS or len(clean_l) < 2:
+                continue
+            if "@" in clean_l or ":" in clean_l or "," in clean_l or any(char.isdigit() for char in clean_l):
+                continue
+                
+            words = clean_l.split()
+            if 1 <= len(words) <= 3 and all(w.isalpha() or w.endswith(".") for w in words):
+                if not any(bw in clean_l.lower().split() for bw in NAME_BLACKLIST):
+                    candidate_words = list(words)
+                    if i + 1 < len(lines):
+                        next_l = lines[i+1].strip()
+                        next_words = next_l.split()
+                        if 1 <= len(next_words) <= 2 and all(w.isalpha() or w.endswith(".") for w in next_words):
+                            if next_l.lower() not in SECTION_KEYWORDS and not any(bw in next_l.lower().split() for bw in NAME_BLACKLIST):
+                                if not ("@" in next_l or ":" in next_l or "," in next_l or any(char.isdigit() for char in next_l)):
+                                    candidate_words.extend(next_words)
+                    
+                    if 2 <= len(candidate_words) <= 4:
+                        full_name_str = " ".join(candidate_words)
+                        guessed_name = full_name_str.title() if full_name_str.isupper() else full_name_str
+                        break
         if not guessed_name:
             # Clean filename
             base_name = os.path.splitext(file_name)[0]
-            # Replace common dividers with spaces
             base_name = re.sub(r"[-_]", " ", base_name)
-            # Remove "resume" or "cv" case insensitively
             base_name = re.sub(r"(?i)\b(resume|cv|pdf|docx|doc|profile)\b", "", base_name).strip()
-            guessed_name = base_name or "Candidate Name"
+            if base_name and base_name.lower() not in SECTION_KEYWORDS:
+                guessed_name = base_name.title()
+            else:
+                guessed_name = "Candidate Name"
             
     # 3. Guess Company and Role for JDs
     guessed_company = ""
@@ -102,15 +128,16 @@ def extract_document_locally_fallback(text: str, doc_type: str, file_name: str) 
         "COD": ["python", "javascript", "typescript", "java", "c++", "c#", "rust", "golang", "ruby", "php", "html", "css", "react", "angular", "vue", "node.js", "frontend", "backend", "fullstack", "programming"],
         "DSA": ["algorithms", "data structures", "leetcode", "arrays", "linked list", "trees", "graphs", "sorting", "searching", "dynamic programming", "recursion"],
         "OOD": ["oop", "design patterns", "object-oriented", "encapsulation", "polymorphism", "inheritance"],
-        "SQL": ["sql", "mysql", "postgresql", "sqlite", "database", "mongodb", "redis", "cassandra", "nosql"],
+        "SQL": ["sql", "mysql", "postgresql", "sqlite", "database", "mongodb", "redis", "cassandra", "nosql", "rds"],
         "AI": ["machine learning", "deep learning", "ai", "llm", "nlp", "neural networks", "tensorflow", "pytorch", "scikit-learn", "keras"],
-        "CLOUD": ["aws", "azure", "gcp", "docker", "kubernetes", "ci/cd", "devops", "cloud computing", "serverless", "microservices"],
-        "SWE": ["agile", "scrum", "git", "github", "testing", "unit tests", "integration tests", "version control", "software engineering"],
+        "CLOUD": ["aws", "amazon ec2", "ec2", "s3", "lambda", "eks", "iam", "vpc", "cloudwatch", "azure", "gcp", "docker", "kubernetes", "helm", "ci/cd", "devops", "cloud computing", "serverless", "microservices", "terraform", "ansible", "iac", "infrastructure as code"],
+        "SWE": ["agile", "scrum", "git", "github", "gitlab", "jenkins", "testing", "unit tests", "integration tests", "version control", "software engineering"],
         "SYSD": ["system design", "scalability", "load balancing", "caching", "message queue", "kafka", "rabbitmq", "distributed systems"],
-        "NETW": ["networking", "http", "tcp/ip", "dns", "rest api", "websockets", "protocols"],
-        "OS": ["linux", "unix", "windows", "macos", "bash", "shell scripting", "concurrency", "multithreading"],
+        "NETW": ["networking", "http", "tcp/ip", "dns", "rest api", "websockets", "protocols", "vpn"],
+        "OS": ["linux", "unix", "windows", "macos", "bash", "shell scripting", "bash/shell", "concurrency", "multithreading"],
         "APTI": ["problem solving", "analytical skills", "mathematics", "logical reasoning", "aptitude"],
-        "COMM": ["communication", "presentation", "team player", "leadership", "collaboration", "project management"]
+        "COMM": ["communication", "presentation", "team player", "leadership", "collaboration", "project management"],
+        "OTHER": ["prometheus", "grafana", "elk", "wazuh", "soar", "soc", "cybersecurity"]
     }
     
     extracted_skills = []
@@ -120,7 +147,7 @@ def extract_document_locally_fallback(text: str, doc_type: str, file_name: str) 
     for category, keywords in category_map.items():
         for kw in keywords:
             pattern = r'\b' + re.escape(kw) + r'\b'
-            if kw in ["c++", "c#", "node.js", "tcp/ip", "ci/cd"]:
+            if kw in ["c++", "c#", "node.js", "tcp/ip", "ci/cd", "bash/shell"]:
                 pattern = re.escape(kw)
                 
             matches = list(re.finditer(pattern, lower_text))
@@ -132,6 +159,12 @@ def extract_document_locally_fallback(text: str, doc_type: str, file_name: str) 
                     disp_name = "JavaScript"
                 elif kw == "typescript":
                     disp_name = "TypeScript"
+                elif kw == "amazon ec2":
+                    disp_name = "Amazon EC2"
+                elif kw in ["iac", "infrastructure as code"]:
+                    disp_name = "Infrastructure as Code (IaC)"
+                elif kw == "ci/cd":
+                    disp_name = "CI/CD"
                     
                 if disp_name not in seen_skills:
                     seen_skills.add(disp_name)
@@ -155,10 +188,10 @@ def extract_document_locally_fallback(text: str, doc_type: str, file_name: str) 
     guessed_education = []
     for line in lines:
         lower_line = line.lower()
-        if any(deg in lower_line for deg in ["btech", "b.tech", "mtech", "m.tech", "b.e", "be ", "b.sc", "bsc", "m.sc", "msc", "bachelor", "master", "phd"]):
-            institution = "Unknown University"
+        if any(deg in lower_line for deg in ["btech", "b.tech", "mtech", "m.tech", "b.e", "be ", "b.sc", "bsc", "m.sc", "msc", "bachelor", "master", "phd", "10+2", "class", "engineering"]):
+            institution = "Academic Institution"
             for word in line.split():
-                if any(inst in word.lower() for inst in ["university", "college", "institute", "school", "iit", "nit", "bits"]):
+                if any(inst in word.lower() for inst in ["university", "college", "institute", "school", "iit", "nit", "bits", "vidyalaya", "srm"]):
                     institution = line.strip()
                     break
             year_match = re.search(r"\b(20\d{2})\b", line)
@@ -170,7 +203,7 @@ def extract_document_locally_fallback(text: str, doc_type: str, file_name: str) 
             })
             
     if not guessed_education:
-        guessed_education = [{"degree": "Bachelor of Technology", "institution": "KITS", "year": "2026"}]
+        guessed_education = [{"degree": "Bachelor of Technology", "institution": "Academic Institution", "year": "2026"}]
 
     if doc_type == "jd":
         return {
@@ -215,6 +248,32 @@ class ExtractionService:
             )
 
     @classmethod
+    def call_gemini(cls, prompt: str, json_schema: dict) -> tuple[str, int, int, str]:
+        """Call Google Gemini REST API directly using GEMINI_API_KEY or GOOGLE_API_KEY."""
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY/GOOGLE_API_KEY is not configured")
+            
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "response_mime_type": "application/json",
+                "maxOutputTokens": 2000,
+                "temperature": 0.1
+            }
+        }
+        res = requests.post(url, json=payload, timeout=30)
+        if res.status_code == 200:
+            res_data = res.json()
+            content = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            in_tokens = estimate_tokens(prompt)
+            out_tokens = estimate_tokens(content)
+            return content, in_tokens, out_tokens, "gemini-2.5-flash"
+        else:
+            raise RuntimeError(f"Gemini API call failed with status {res.status_code}: {res.text}")
+
+    @classmethod
     def call_openrouter(cls, prompt: str, json_schema: dict) -> tuple[str, int, int, str]:
         """Call OpenRouter API with JSON schema fallback or format constraints."""
         url = "https://openrouter.ai/api/v1/chat/completions"
@@ -225,7 +284,18 @@ class ExtractionService:
             "X-Title": "RADIX Talent Match"
         }
         
-        primary_model = "google/gemini-2.5-flash:free"
+        primary_model = "openrouter/free"
+        models_to_try = [
+            "openrouter/free",
+            "google/gemma-4-31b-it:free",
+            "google/gemma-4-26b-a4b-it:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "google/gemini-2.5-flash",
+            "meta-llama/llama-3.3-70b-instruct"
+        ]
+        
+        max_tokens_capped = min(settings.LLM_MAX_TOKENS, 1500)
+        
         data = {
             "model": primary_model,
             "messages": [
@@ -237,28 +307,28 @@ class ExtractionService:
             ],
             "response_format": {"type": "json_object"},
             "temperature": 0.1,
-            "max_tokens": settings.LLM_MAX_TOKENS
+            "max_tokens": max_tokens_capped
         }
         
-        try:
-            response = requests.post(url, json=data, headers=headers, timeout=60)
-            if response.status_code != 200:
-                print(f"[Self-Healing] Primary model failed with status {response.status_code}. Retrying with free model meta-llama/llama-3.3-70b-instruct:free")
-                data["model"] = "meta-llama/llama-3.3-70b-instruct:free"
-                response = requests.post(url, json=data, headers=headers, timeout=60)
-                if response.status_code != 200:
-                    print(f"[Self-Healing] Secondary free model failed with status {response.status_code}. Retrying with google/gemma-2-9b-it:free")
-                    data["model"] = "google/gemma-2-9b-it:free"
-                    response = requests.post(url, json=data, headers=headers, timeout=60)
-                if response.status_code == 200:
-                    primary_model = data["model"]
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"OpenRouter API connection failed: {str(e)}")
+        response = None
+        for m in models_to_try:
+            try:
+                data["model"] = m
+                res = requests.post(url, json=data, headers=headers, timeout=45)
+                if res.status_code == 200:
+                    response = res
+                    primary_model = m
+                    break
+                else:
+                    print(f"[Self-Healing] OpenRouter model {m} failed with status {res.status_code}. Trying next model...")
+            except requests.exceptions.RequestException:
+                continue
+                
+        if not response or response.status_code != 200:
+            err_msg = response.text if response else "All OpenRouter models failed or timed out."
+            raise RuntimeError(f"OpenRouter API call failed: {err_msg}")
             
         model_used = primary_model
-        if response.status_code != 200:
-            raise RuntimeError(f"OpenRouter API call failed (status {response.status_code}): {response.text}")
-                
         res_data = response.json()
         choices = res_data.get("choices", [])
         if not choices:
@@ -273,13 +343,13 @@ class ExtractionService:
 
     @classmethod
     def extract_document(cls, db: Session, doc_id: str, force: bool = False) -> Extraction:
-        """Run extraction on a document using OpenRouter API or local Ollama. Uses cache if possible."""
+        """Run extraction on a document using Gemini API, OpenRouter API or local Ollama. Uses cache if possible."""
         existing_extraction = db.query(Extraction).filter(
             Extraction.document_id == doc_id,
             Extraction.status == "completed"
         ).first()
         
-        if existing_extraction and not force:
+        if existing_extraction and not force and len(existing_extraction.skills) > 0:
             return existing_extraction
             
         doc = db.query(Document).filter(Document.id == doc_id).first()
@@ -310,13 +380,24 @@ class ExtractionService:
             json_schema_dict = schema_model.model_json_schema()
             
             try:
-                if settings.OPENROUTER_API_KEY:
+                gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+                if gemini_key:
+                    try:
+                        response_text, in_tokens, out_tokens, model_used = cls.call_gemini(prompt, json_schema_dict)
+                    except Exception as gem_err:
+                        print(f"[Gemini Direct API Failed]: {gem_err}. Falling back to OpenRouter/Ollama...")
+                        if settings.OPENROUTER_API_KEY:
+                            response_text, in_tokens, out_tokens, model_used = cls.call_openrouter(prompt, json_schema_dict)
+                        else:
+                            response_text, in_tokens, out_tokens, model_used = cls.call_ollama(prompt, json_schema_dict)
+                elif settings.OPENROUTER_API_KEY:
                     response_text, in_tokens, out_tokens, model_used = cls.call_openrouter(prompt, json_schema_dict)
                 else:
                     response_text, in_tokens, out_tokens, model_used = cls.call_ollama(prompt, json_schema_dict)
                 
                 response_text = clean_llm_json(response_text)
                 parsed_data = json.loads(response_text)
+
             except Exception as llm_err:
                 print(f"[Extraction Service] LLM extraction failed: {llm_err}. Falling back to local rule-based extractor.")
                 parsed_data = extract_document_locally_fallback(text_content, doc.doc_type, doc.source_file_name)
@@ -332,19 +413,28 @@ class ExtractionService:
                 
                 # Check candidate_name
                 c_name = parsed_data.get("candidate_name")
-                if not c_name or c_name == "null" or str(c_name).strip() == "":
-                    # Guess name from first few lines or filename
+                SECTION_KEYWORDS = {"skills", "education", "contact", "profile", "work experience", "experience", "projects", "certifications", "summary", "about me", "dev ops", "devops"}
+                if not c_name or c_name == "null" or str(c_name).strip() == "" or str(c_name).strip().lower() in SECTION_KEYWORDS:
+                    # Guess name from lines
                     guessed_n = ""
-                    for line in text_content.split("\n")[:3]:
-                        words = line.strip().split()
-                        if 2 <= len(words) <= 3 and all(w.isalpha() for w in words):
-                            guessed_n = line.strip()
+                    for line in text_content.split("\n")[:25]:
+                        clean_l = line.strip()
+                        if clean_l.lower() in SECTION_KEYWORDS or len(clean_l) < 3:
+                            continue
+                        if "@" in clean_l or ":" in clean_l or "," in clean_l or any(char.isdigit() for char in clean_l):
+                            continue
+                        words = clean_l.split()
+                        if 2 <= len(words) <= 4 and all(w.isalpha() or w.endswith(".") for w in words):
+                            guessed_n = clean_l.title() if clean_l.isupper() else clean_l
                             break
                     if not guessed_n:
                         base_n = os.path.splitext(doc.source_file_name)[0]
                         base_n = re.sub(r"[-_]", " ", base_n)
                         base_n = re.sub(r"(?i)\b(resume|cv|pdf|docx|doc|profile)\b", "", base_n).strip()
-                        guessed_n = base_n or "Candidate Name"
+                        if base_n and base_n.lower() not in SECTION_KEYWORDS:
+                            guessed_n = base_n.title()
+                        else:
+                            guessed_n = "Candidate Name"
                     parsed_data["candidate_name"] = guessed_n
 
                 # Check email

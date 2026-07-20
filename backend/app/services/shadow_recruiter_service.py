@@ -80,7 +80,7 @@ class ShadowRecruiterService:
             target_jd = db.query(Extraction).filter(Extraction.id == jd_extraction_id).first()
 
         # Build combined candidate resume text
-        candidate_text = cls._build_candidate_text(candidate)
+        candidate_text = cls._build_candidate_text(candidate, db)
 
         # ---------------------------------------------------------------------
         # NODE 1: Critic Agent (Adversarial Screener)
@@ -299,7 +299,7 @@ class ShadowRecruiterService:
     # Helpers
     # -------------------------------------------------------------------------
     @staticmethod
-    def _build_candidate_text(candidate: Candidate) -> str:
+    def _build_candidate_text(candidate: Candidate, db: Optional[Session] = None) -> str:
         parts = [
             f"Name: {candidate.name}",
             f"Education: {candidate.education or ''}",
@@ -311,6 +311,23 @@ class ShadowRecruiterService:
                 for s in candidate.skills
             ])
             parts.append(f"Skills: {skill_str}")
+
+        if db:
+            from backend.app.models import Document, Extraction
+            from backend.app.utils.text_parser import extract_text
+            latest_doc = db.query(Document).filter(
+                Document.owner_id == candidate.user_id,
+                Document.doc_type == "resume"
+            ).order_by(Document.uploaded_at.desc()).first()
+            
+            if latest_doc:
+                try:
+                    resume_text = extract_text(latest_doc.storage_ref)
+                    if resume_text.strip():
+                        parts.append(f"\nResume Content:\n{resume_text}")
+                except Exception:
+                    pass
+
         return "\n".join(parts)
 
     @staticmethod
