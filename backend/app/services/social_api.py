@@ -10,38 +10,46 @@ GITHUB_API_BASE = "https://api.github.com"
 
 
 async def fetch_github_profile(access_token: str) -> dict[str, Any]:
+    token_or_username = access_token.strip()
     headers = {
-        "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "KITS-Placement-Hub",
     }
+    if token_or_username.startswith(("ghp_", "gho_", "github_pat_")) or len(token_or_username) > 30:
+        headers["Authorization"] = f"Bearer {token_or_username}"
+
     async with httpx.AsyncClient(timeout=30.0) as client:
+        # 1. Try authenticated /user endpoint
         user_resp = await client.get(f"{GITHUB_API_BASE}/user", headers=headers)
-        if user_resp.status_code != 200:
-            raise HTTPException(status_code=user_resp.status_code, detail="GitHub profile fetch failed")
-        profile = user_resp.json()
+        if user_resp.status_code == 200:
+            profile = user_resp.json()
+            repos_url = f"{GITHUB_API_BASE}/user/repos"
+        else:
+            # 2. Fallback to public /users/{username} endpoint
+            user_resp = await client.get(f"{GITHUB_API_BASE}/users/{token_or_username}", headers=headers)
+            if user_resp.status_code != 200:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Could not find GitHub user or valid token for '{token_or_username}'"
+                )
+            profile = user_resp.json()
+            repos_url = f"{GITHUB_API_BASE}/users/{profile['login']}/repos"
 
         repos_resp = await client.get(
-            f"{GITHUB_API_BASE}/user/repos",
+            repos_url,
             headers=headers,
-            params={"sort": "updated", "per_page": 100, "type": "owner"},
+            params={"sort": "updated", "per_page": 100},
         )
-        repos = repos_resp.json() if repos_resp.status_code == 200 else []
+        repos = repos_resp.json() if repos_resp.status_code == 200 and isinstance(repos_resp.json(), list) else []
 
         lang_map: dict[str, int] = {}
         for repo in repos:
             if repo.get("fork"):
                 continue
-            try:
-                lang_resp = await client.get(
-                    repo["languages_url"],
-                    headers=headers,
-                )
-                if lang_resp.status_code == 200:
-                    for lang, bytes_ in lang_resp.json().items():
-                        lang_map[lang] = lang_map.get(lang, 0) + bytes_
-            except Exception:
-                continue
+            if repo.get("language"):
+                lang = repo["language"]
+                lang_map[lang] = lang_map.get(lang, 0) + repo.get("size", 100)
 
         top_repos = sorted(
             [r for r in repos if not r.get("fork")],
@@ -63,12 +71,12 @@ async def fetch_github_profile(access_token: str) -> dict[str, Any]:
             headers=headers,
             params={"per_page": 100},
         )
-        events = events_resp.json() if events_resp.status_code == 200 else []
+        events = events_resp.json() if events_resp.status_code == 200 and isinstance(events_resp.json(), list) else []
         push_dates = sorted(
             {
                 e["created_at"][:10]
                 for e in events
-                if e.get("type") == "PushEvent"
+                if e.get("type") == "PushEvent" and "created_at" in e
             },
             reverse=True,
         )
@@ -83,7 +91,7 @@ async def fetch_github_profile(access_token: str) -> dict[str, Any]:
 
     return {
         "login": profile.get("login"),
-        "name": profile.get("name"),
+        "name": profile.get("name") or profile.get("login"),
         "avatar_url": profile.get("avatar_url"),
         "public_repos": profile.get("public_repos", 0),
         "followers": profile.get("followers", 0),

@@ -492,6 +492,16 @@ export default function App() {
   const [innovxOpps, setInnovxOpps] = useState<any[]>([]);
   const [innovxApps, setInnovxApps] = useState<any[]>([]);
 
+  // Social Integrations (GitHub & LeetCode)
+  const [socialConnections, setSocialConnections] = useState<any[]>([]);
+  const [socialStats, setSocialStats] = useState<{ github: any; leetcode: any }>({ github: null, leetcode: null });
+  const [githubInput, setGithubInput] = useState<string>('');
+  const [leetcodeUsernameInput, setLeetcodeUsernameInput] = useState<string>('');
+  const [leetcodeCookieInput, setLeetcodeCookieInput] = useState<string>('');
+  const [connectingGithub, setConnectingGithub] = useState<boolean>(false);
+  const [connectingLeetcode, setConnectingLeetcode] = useState<boolean>(false);
+  const [syncingSocial, setSyncingSocial] = useState<boolean>(false);
+
   // Generic loading & messages
   const [loading, setLoading] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -514,6 +524,7 @@ export default function App() {
       fetchStudentDashboard();
       fetchInnovXData();
       fetchMockTestHistory();
+      fetchSocialConnections();
     }
   }, [token]);
 
@@ -684,6 +695,122 @@ export default function App() {
       if (err.message.includes('not initialized')) {
         setProfile(null);
       }
+    }
+  };
+
+  const fetchSocialConnections = async () => {
+    try {
+      const [connRes, statsRes] = await Promise.all([
+        apiCall('/social/connections').catch(() => ({ connections: [] })),
+        apiCall('/social/stats').catch(() => ({ github: null, leetcode: null })),
+      ]);
+      setSocialConnections(connRes.connections || []);
+      setSocialStats(statsRes || { github: null, leetcode: null });
+    } catch (err: any) {
+      console.error("Failed to fetch social connections:", err);
+    }
+  };
+
+  const handleConnectGithub = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!githubInput.trim()) return;
+    setConnectingGithub(true);
+    try {
+      const res = await apiCall('/social/github/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: githubInput.trim() })
+      });
+      triggerMessage('success', `Successfully connected GitHub account @${res.profile?.login || githubInput}!`);
+      setGithubInput('');
+      await fetchSocialConnections();
+    } catch (err: any) {
+      triggerMessage('error', err.message || 'Failed to connect GitHub account.');
+    } finally {
+      setConnectingGithub(false);
+    }
+  };
+
+  const handleDisconnectGithub = async () => {
+    try {
+      await apiCall('/social/github/disconnect', { method: 'DELETE' });
+      triggerMessage('success', 'Disconnected GitHub account.');
+      await fetchSocialConnections();
+    } catch (err: any) {
+      triggerMessage('error', err.message || 'Failed to disconnect GitHub.');
+    }
+  };
+
+  const handleSyncGithub = async () => {
+    setSyncingSocial(true);
+    try {
+      const conn = socialConnections.find(c => c.platform === 'github');
+      await apiCall('/social/github/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ encrypted_token: conn?.access_token || '' })
+      });
+      triggerMessage('success', 'GitHub statistics synchronized!');
+      await fetchSocialConnections();
+    } catch (err: any) {
+      triggerMessage('error', err.message || 'Failed to sync GitHub stats.');
+    } finally {
+      setSyncingSocial(false);
+    }
+  };
+
+  const handleConnectLeetcode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leetcodeUsernameInput.trim()) return;
+    setConnectingLeetcode(true);
+    try {
+      const res = await apiCall('/social/leetcode/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: leetcodeUsernameInput.trim(),
+          session_cookie: leetcodeCookieInput.trim() || undefined
+        })
+      });
+      triggerMessage('success', `Successfully connected LeetCode profile @${res.profile?.username || leetcodeUsernameInput}!`);
+      setLeetcodeUsernameInput('');
+      setLeetcodeCookieInput('');
+      await fetchSocialConnections();
+    } catch (err: any) {
+      triggerMessage('error', err.message || 'Failed to connect LeetCode account.');
+    } finally {
+      setConnectingLeetcode(false);
+    }
+  };
+
+  const handleDisconnectLeetcode = async () => {
+    try {
+      await apiCall('/social/leetcode/disconnect', { method: 'DELETE' });
+      triggerMessage('success', 'Disconnected LeetCode profile.');
+      await fetchSocialConnections();
+    } catch (err: any) {
+      triggerMessage('error', err.message || 'Failed to disconnect LeetCode.');
+    }
+  };
+
+  const handleSyncLeetcode = async () => {
+    setSyncingSocial(true);
+    try {
+      const conn = socialConnections.find(c => c.platform === 'leetcode');
+      await apiCall('/social/leetcode/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: socialStats.leetcode?.username || conn?.username || '',
+          encrypted_cookie: conn?.access_token || ''
+        })
+      });
+      triggerMessage('success', 'LeetCode metrics synchronized!');
+      await fetchSocialConnections();
+    } catch (err: any) {
+      triggerMessage('error', err.message || 'Failed to sync LeetCode metrics.');
+    } finally {
+      setSyncingSocial(false);
     }
   };
 
@@ -1389,6 +1516,7 @@ export default function App() {
         }}>
           {[
             { id: 'profile', label: 'My Talent Profile', icon: UserIcon },
+            { id: 'social-integrations', label: 'GitHub & LeetCode', icon: Globe },
             { id: 'jd-parser', label: 'JD & CV Upload', icon: Upload },
             { id: 'talent-check', label: 'Talent Benchmarking', icon: Sliders },
             { id: 'skill-match', label: 'Skill Matcher', icon: Award },
@@ -1474,6 +1602,7 @@ export default function App() {
           <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
             {[
               { id: 'profile', label: 'My Talent Profile', icon: UserIcon },
+              { id: 'social-integrations', label: 'GitHub & LeetCode', icon: Globe },
               { id: 'jd-parser', label: 'JD & CV Upload', icon: Upload },
               { id: 'talent-check', label: 'Talent Benchmarking', icon: Sliders },
               { id: 'skill-match', label: 'Skill Matcher', icon: Award },
@@ -1823,6 +1952,559 @@ export default function App() {
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {/* Tab: GitHub & LeetCode Integrations */}
+        {currentTab === 'social-integrations' && (
+          <div className="animate-slide-up" style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+            {/* Header Banner */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <Globe size={28} color="var(--white-pure)" />
+                  <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '32px' }}>Developer Integrations</h1>
+                </div>
+                <p style={{ color: 'var(--color-text-muted)', fontSize: '14px', maxWidth: '650px' }}>
+                  Connect your GitHub repositories and LeetCode problem-solving metrics to auto-sync verified evidence, repository statistics, contribution streaks, and contest history.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button
+                  onClick={fetchSocialConnections}
+                  disabled={syncingSocial}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: 'var(--black-elevated)',
+                    border: '1px solid var(--grey-700)',
+                    color: 'var(--white-pure)',
+                    padding: '10px 16px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'var(--transition-smooth)'
+                  }}
+                >
+                  <RefreshCw size={14} className={syncingSocial ? 'spin' : ''} />
+                  Refresh All Metrics
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Status Bar */}
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              <div style={{
+                background: 'var(--black-elevated)',
+                border: '1px solid var(--grey-800)',
+                padding: '12px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                flex: 1,
+                minWidth: '220px'
+              }}>
+                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: socialStats.github ? '#10B981' : 'var(--grey-600)' }}></div>
+                <div>
+                  <span style={{ fontSize: '11px', color: 'var(--grey-400)', display: 'block', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>GitHub Status</span>
+                  <strong style={{ fontSize: '14px', color: 'var(--white-pure)' }}>
+                    {socialStats.github ? `@${socialStats.github.login}` : 'Not Connected'}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={{
+                background: 'var(--black-elevated)',
+                border: '1px solid var(--grey-800)',
+                padding: '12px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                flex: 1,
+                minWidth: '220px'
+              }}>
+                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: socialStats.leetcode ? '#10B981' : 'var(--grey-600)' }}></div>
+                <div>
+                  <span style={{ fontSize: '11px', color: 'var(--grey-400)', display: 'block', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>LeetCode Status</span>
+                  <strong style={{ fontSize: '14px', color: 'var(--white-pure)' }}>
+                    {socialStats.leetcode ? `@${socialStats.leetcode.username}` : 'Not Connected'}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Main 2-Column Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '24px' }}>
+              
+              {/* ========================================================================= */}
+              {/* COLUMN 1: GITHUB CONNECTION & DASHBOARD */}
+              {/* ========================================================================= */}
+              <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--grey-800)', paddingBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '32px', height: '32px', background: 'var(--black-void)', border: '1px solid var(--grey-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Globe size={18} color="var(--white-pure)" />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--white-pure)' }}>GitHub Account</h3>
+                      <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)' }}>Code Repositories & Commits</span>
+                    </div>
+                  </div>
+
+                  {socialStats.github && (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={handleSyncGithub}
+                        disabled={syncingSocial}
+                        style={{ background: 'var(--black-hover)', border: '1px solid var(--grey-700)', color: 'var(--grey-300)', padding: '6px 12px', fontSize: '12px', cursor: 'pointer' }}
+                      >
+                        Sync
+                      </button>
+                      <button
+                        onClick={handleDisconnectGithub}
+                        style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#F87171', padding: '6px 12px', fontSize: '12px', cursor: 'pointer' }}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {!socialStats.github ? (
+                  /* Connect Form */
+                  <form onSubmit={handleConnectGithub} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '16px' }}>
+                      <p style={{ fontSize: '13px', color: 'var(--grey-300)', marginBottom: '12px', lineHeight: '1.5' }}>
+                        Enter your <strong>GitHub Username</strong> (or Personal Access Token) to sync public repositories, commit streaks, and language stats.
+                      </p>
+                      <label style={{ display: 'block', fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                        GitHub Username or Personal Access Token
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. octocat or ghp_..."
+                        value={githubInput}
+                        onChange={(e) => setGithubInput(e.target.value)}
+                        style={{
+                          width: '100%',
+                          background: 'var(--black-elevated)',
+                          border: '1px solid var(--grey-700)',
+                          color: 'var(--white-pure)',
+                          padding: '10px 12px',
+                          fontSize: '14px',
+                          fontFamily: 'var(--font-mono)',
+                          marginBottom: '12px'
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          type="submit"
+                          disabled={connectingGithub || !githubInput.trim()}
+                          style={{
+                            flex: 1,
+                            background: 'var(--white-pure)',
+                            color: '#000',
+                            border: 'none',
+                            padding: '10px 16px',
+                            fontWeight: 700,
+                            fontSize: '13px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {connectingGithub ? 'Connecting to GitHub...' : 'Connect GitHub Account'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGithubInput('octocat')}
+                          style={{
+                            background: 'var(--black-hover)',
+                            border: '1px solid var(--grey-700)',
+                            color: 'var(--grey-300)',
+                            padding: '10px 12px',
+                            fontSize: '12px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Try Demo
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : (
+                  /* Connected Dashboard */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {/* User Profile Summary */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '16px' }}>
+                      {socialStats.github.avatar_url ? (
+                        <img src={socialStats.github.avatar_url} alt="GitHub Avatar" style={{ width: '56px', height: '56px', borderRadius: '50%', border: '2px solid var(--grey-700)' }} />
+                      ) : (
+                        <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700 }}>
+                          {socialStats.github.login[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--white-pure)' }}>{socialStats.github.name || socialStats.github.login}</h4>
+                        <span style={{ fontSize: '13px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)' }}>@{socialStats.github.login}</span>
+                      </div>
+                      <a
+                        href={`https://github.com/${socialStats.github.login}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: '12px', color: 'var(--white-pure)', textDecoration: 'underline', fontFamily: 'var(--font-mono)' }}
+                      >
+                        View Profile ↗
+                      </a>
+                    </div>
+
+                    {/* Key Metrics Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                      <div style={{ background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '14px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Public Repos</span>
+                        <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--white-pure)', marginTop: '4px' }}>{socialStats.github.public_repos}</div>
+                      </div>
+                      <div style={{ background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '14px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Followers / Following</span>
+                        <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--white-pure)', marginTop: '4px' }}>
+                          {socialStats.github.followers} / {socialStats.github.following}
+                        </div>
+                      </div>
+                      <div style={{ background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '14px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Commits (1-Year)</span>
+                        <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--white-pure)', marginTop: '4px' }}>{socialStats.github.total_commits_last_year}</div>
+                      </div>
+                      <div style={{ background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '14px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Active Streak</span>
+                        <div style={{ fontSize: '22px', fontWeight: 800, color: '#10B981', marginTop: '4px' }}>
+                          ⚡ {socialStats.github.contribution_streak} days
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Top Repositories */}
+                    {socialStats.github.top_repos && socialStats.github.top_repos.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Top Repositories
+                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {socialStats.github.top_repos.map((r: any, idx: number) => (
+                            <a
+                              key={idx}
+                              href={r.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                background: 'var(--black-void)',
+                                border: '1px solid var(--grey-800)',
+                                padding: '10px 14px',
+                                textDecoration: 'none',
+                                color: 'var(--white-pure)',
+                                fontSize: '13px'
+                              }}
+                            >
+                              <strong style={{ fontFamily: 'var(--font-mono)' }}>{r.name}</strong>
+                              <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--grey-400)' }}>
+                                <span>⭐ {r.stars}</span>
+                                <span>🍴 {r.forks}</span>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Language Breakdown */}
+                    {socialStats.github.languages && Object.keys(socialStats.github.languages).length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Language Distribution
+                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {Object.entries(socialStats.github.languages).slice(0, 5).map(([lang, ratio]: [string, any]) => {
+                            const pct = Math.round(ratio * 100);
+                            return (
+                              <div key={lang} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                                  <span style={{ color: 'var(--grey-300)', fontFamily: 'var(--font-mono)' }}>{lang}</span>
+                                  <span style={{ color: 'var(--grey-400)', fontWeight: 600 }}>{pct}%</span>
+                                </div>
+                                <div style={{ width: '100%', height: '6px', background: 'var(--grey-800)', borderRadius: '3px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${pct}%`, height: '100%', background: 'var(--white-pure)' }}></div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ========================================================================= */}
+              {/* COLUMN 2: LEETCODE CONNECTION & DASHBOARD */}
+              {/* ========================================================================= */}
+              <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--grey-800)', paddingBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '32px', height: '32px', background: 'var(--black-void)', border: '1px solid var(--grey-700)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <GraduationCap size={18} color="var(--white-pure)" />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--white-pure)' }}>LeetCode Profile</h3>
+                      <span style={{ fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)' }}>DSA Metrics & Contest Ratings</span>
+                    </div>
+                  </div>
+
+                  {socialStats.leetcode && (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={handleSyncLeetcode}
+                        disabled={syncingSocial}
+                        style={{ background: 'var(--black-hover)', border: '1px solid var(--grey-700)', color: 'var(--grey-300)', padding: '6px 12px', fontSize: '12px', cursor: 'pointer' }}
+                      >
+                        Sync
+                      </button>
+                      <button
+                        onClick={handleDisconnectLeetcode}
+                        style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#F87171', padding: '6px 12px', fontSize: '12px', cursor: 'pointer' }}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {!socialStats.leetcode ? (
+                  /* Connect Form */
+                  <form onSubmit={handleConnectLeetcode} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '16px' }}>
+                      <p style={{ fontSize: '13px', color: 'var(--grey-300)', marginBottom: '12px', lineHeight: '1.5' }}>
+                        Enter your <strong>LeetCode Username</strong> to sync problem counts (Easy, Medium, Hard), contest rating, and recent submissions.
+                      </p>
+                      <label style={{ display: 'block', fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                        LeetCode Username
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. tourist or your_leetcode_handle"
+                        value={leetcodeUsernameInput}
+                        onChange={(e) => setLeetcodeUsernameInput(e.target.value)}
+                        style={{
+                          width: '100%',
+                          background: 'var(--black-elevated)',
+                          border: '1px solid var(--grey-700)',
+                          color: 'var(--white-pure)',
+                          padding: '10px 12px',
+                          fontSize: '14px',
+                          fontFamily: 'var(--font-mono)',
+                          marginBottom: '12px'
+                        }}
+                      />
+
+                      <label style={{ display: 'block', fontSize: '11px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', marginBottom: '6px', textTransform: 'uppercase' }}>
+                        Session Cookie (Optional for Private Accounts)
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="LEETCODE_SESSION cookie (optional)"
+                        value={leetcodeCookieInput}
+                        onChange={(e) => setLeetcodeCookieInput(e.target.value)}
+                        style={{
+                          width: '100%',
+                          background: 'var(--black-elevated)',
+                          border: '1px solid var(--grey-700)',
+                          color: 'var(--white-pure)',
+                          padding: '10px 12px',
+                          fontSize: '14px',
+                          fontFamily: 'var(--font-mono)',
+                          marginBottom: '16px'
+                        }}
+                      />
+
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          type="submit"
+                          disabled={connectingLeetcode || !leetcodeUsernameInput.trim()}
+                          style={{
+                            flex: 1,
+                            background: 'var(--white-pure)',
+                            color: '#000',
+                            border: 'none',
+                            padding: '10px 16px',
+                            fontWeight: 700,
+                            fontSize: '13px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {connectingLeetcode ? 'Fetching LeetCode Profile...' : 'Connect LeetCode Profile'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLeetcodeUsernameInput('tourist')}
+                          style={{
+                            background: 'var(--black-hover)',
+                            border: '1px solid var(--grey-700)',
+                            color: 'var(--grey-300)',
+                            padding: '10px 12px',
+                            fontSize: '12px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Try Demo
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : (
+                  /* Connected Dashboard */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {/* Profile Summary */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '16px' }}>
+                      {socialStats.leetcode.avatar ? (
+                        <img src={socialStats.leetcode.avatar} alt="LeetCode Avatar" style={{ width: '56px', height: '56px', borderRadius: '50%', border: '2px solid var(--grey-700)' }} />
+                      ) : (
+                        <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--grey-800)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700 }}>
+                          {socialStats.leetcode.username[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--white-pure)' }}>
+                          {socialStats.leetcode.real_name || socialStats.leetcode.username}
+                        </h4>
+                        <span style={{ fontSize: '13px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)' }}>@{socialStats.leetcode.username}</span>
+                        {socialStats.leetcode.ranking && (
+                          <div style={{ fontSize: '11px', color: '#10B981', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+                            Global Rank: #{socialStats.leetcode.ranking.toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                      <a
+                        href={`https://leetcode.com/${socialStats.leetcode.username}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: '12px', color: 'var(--white-pure)', textDecoration: 'underline', fontFamily: 'var(--font-mono)' }}
+                      >
+                        View Profile ↗
+                      </a>
+                    </div>
+
+                    {/* Solved Problems Breakdown */}
+                    <div style={{ background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>
+                          Problems Solved
+                        </span>
+                        <strong style={{ fontSize: '20px', color: 'var(--white-pure)', fontFamily: 'var(--font-mono)' }}>
+                          {socialStats.leetcode.total_solved}
+                        </strong>
+                      </div>
+
+                      {/* Difficulty Bars */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {/* Easy */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                            <span style={{ color: '#10B981', fontWeight: 600 }}>🟢 Easy</span>
+                            <span style={{ color: 'var(--grey-300)', fontFamily: 'var(--font-mono)' }}>{socialStats.leetcode.easy_solved} solved</span>
+                          </div>
+                          <div style={{ width: '100%', height: '6px', background: 'var(--grey-800)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, (socialStats.leetcode.easy_solved / Math.max(1, socialStats.leetcode.total_solved)) * 100)}%`, height: '100%', background: '#10B981' }}></div>
+                          </div>
+                        </div>
+
+                        {/* Medium */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                            <span style={{ color: '#F59E0B', fontWeight: 600 }}>🟠 Medium</span>
+                            <span style={{ color: 'var(--grey-300)', fontFamily: 'var(--font-mono)' }}>{socialStats.leetcode.medium_solved} solved</span>
+                          </div>
+                          <div style={{ width: '100%', height: '6px', background: 'var(--grey-800)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, (socialStats.leetcode.medium_solved / Math.max(1, socialStats.leetcode.total_solved)) * 100)}%`, height: '100%', background: '#F59E0B' }}></div>
+                          </div>
+                        </div>
+
+                        {/* Hard */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                            <span style={{ color: '#EF4444', fontWeight: 600 }}>🔴 Hard</span>
+                            <span style={{ color: 'var(--grey-300)', fontFamily: 'var(--font-mono)' }}>{socialStats.leetcode.hard_solved} solved</span>
+                          </div>
+                          <div style={{ width: '100%', height: '6px', background: 'var(--grey-800)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, (socialStats.leetcode.hard_solved / Math.max(1, socialStats.leetcode.total_solved)) * 100)}%`, height: '100%', background: '#EF4444' }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Performance & Language Badges */}
+                    {socialStats.leetcode.language_stats && Object.keys(socialStats.leetcode.language_stats).length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Languages Used
+                        </span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                          {Object.entries(socialStats.leetcode.language_stats).map(([lang, count]: [string, any]) => (
+                            <div key={lang} style={{ background: 'var(--black-void)', border: '1px solid var(--grey-800)', padding: '6px 12px', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
+                              <span style={{ color: 'var(--white-pure)', fontWeight: 600 }}>{lang}</span>: <span style={{ color: 'var(--grey-400)' }}>{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recent Submissions */}
+                    {socialStats.leetcode.recent_submissions && socialStats.leetcode.recent_submissions.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--grey-400)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          Recent Submissions
+                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                          {socialStats.leetcode.recent_submissions.slice(0, 8).map((sub: any, idx: number) => (
+                            <div
+                              key={idx}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                background: 'var(--black-void)',
+                                border: '1px solid var(--grey-800)',
+                                padding: '8px 12px',
+                                fontSize: '12px'
+                              }}
+                            >
+                              <span style={{ color: 'var(--white-pure)', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+                                {sub.title}
+                              </span>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <span style={{
+                                  fontSize: '10px',
+                                  padding: '2px 6px',
+                                  background: sub.difficulty === 'Easy' ? 'rgba(16, 185, 129, 0.15)' : sub.difficulty === 'Medium' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                  color: sub.difficulty === 'Easy' ? '#10B981' : sub.difficulty === 'Medium' ? '#F59E0B' : '#EF4444',
+                                  fontFamily: 'var(--font-mono)'
+                                }}>
+                                  {sub.difficulty || 'Medium'}
+                                </span>
+                                <span style={{ color: '#10B981', fontWeight: 600, fontSize: '11px' }}>
+                                  {sub.status || 'Accepted'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
         )}
 
